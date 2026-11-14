@@ -1,5 +1,5 @@
 // Carte du restaurant (articles, tarifs) et réglages de l'entreprise (Art. III).
-import { q, table } from "../api.js";
+import { definirCode, q, table } from "../api.js";
 import { $, $$, brancherActions, confirmer, echapper, fmt, formulaire, formulaireEnFenetre, lireFormulaire, tableau, toast } from "../outils.js";
 
 export async function afficher(vue, params) {
@@ -92,7 +92,11 @@ async function reglages(zone) {
   const f = formulaire(champs, { ...r, telephones: (r.telephones || []).join(", ") });
   zone.innerHTML = `<div class="bloc"><div class="bloc-tete"><h2 class="titre-bloc">⚙️ Réglages</h2></div><div id="form"></div>
     <p class="discret">Barème (Art. III) : ${r.tranches.map(([p, t], i) => p === null ? `au-delà : ${t * 100} %` : `${i ? "jusqu'à" : "jusqu'à"} ${fmt(p * 100)} : ${t * 100} %`).join(" · ")}</p>
-    <div style="display:flex;justify-content:flex-end"><button class="btn principal" id="enregistrer">Enregistrer</button></div></div>`;
+    <div style="display:flex;justify-content:flex-end"><button class="btn principal" id="enregistrer">Enregistrer</button></div></div>
+    <div class="bloc"><div class="bloc-tete"><h2 class="titre-bloc">🔐 Code gérant</h2><span class="espace"></span>
+      <button class="btn" id="changer-code">Changer le code</button></div>
+      <p class="discret">Le nouveau code remplace l'ancien tout de suite : les autres appareils devront le retaper.
+      Code oublié : dans Supabase › SQL Editor, exécute <code>delete from acces;</code> puis rouvre l'espace gérant pour en choisir un nouveau.</p></div>`;
   $("#form", zone).appendChild(f);
   $("#enregistrer", zone).onclick = async () => {
     try {
@@ -102,4 +106,13 @@ async function reglages(zone) {
       await q(table("reglages").update(o).eq("id", 1)); toast("Réglages enregistrés.");
     } catch (e) { toast(e.message, true); }
   };
+  const champsCode = [
+    { nom: "code", libelle: "Nouveau code (4 caractères minimum)", type: "motdepasse", requis: true, plein: true },
+    { nom: "confirmation", libelle: "Confirme le nouveau code", type: "motdepasse", requis: true, plein: true },
+  ];
+  $("#changer-code", zone).onclick = () => formulaireEnFenetre("Changer le code gérant", champsCode, {}, async (o) => {
+    if (o.code !== o.confirmation) throw new Error("Les deux codes ne sont pas identiques.");
+    await definirCode(o.code);
+    toast("Nouveau code enregistré : les autres appareils devront le retaper.");
+  });
 }

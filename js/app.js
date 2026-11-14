@@ -1,5 +1,5 @@
 // Routeur du site : #/caisse (libre) et l'espace gérant (code).
-import { connecter, deconnecter, sb, sessionActive } from "./api.js";
+import { connecter, deconnecter, definirCode, etatAcces, sessionActive } from "./api.js";
 import { $, echapper, messageErreur, toast } from "./outils.js";
 
 const PAGES = [
@@ -33,31 +33,50 @@ function dessinerEntete() {
   compte.title = session ? "Se déconnecter de l'espace gérant" : "Ouvrir l'espace gérant";
 }
 
-function pageConnexion(vue, cible) {
-  vue.innerHTML = `<div class="ecran-centre"><div class="fenetre">
+async function pageConnexion(vue, cible) {
+  let premier = false;
+  try { premier = !(await etatAcces(true)).code_defini; } catch { /* base injoignable : formulaire normal */ }
+  if (!vue.isConnected) return;
+  vue.innerHTML = premier ? `<div class="ecran-centre"><div class="fenetre">
+    <h3>Choisis le code gérant</h3>
+    <p class="discret">Première ouverture de l'espace gérant : choisis le code que les gérants taperont pour entrer
+      (4 caractères minimum). Tu pourras le changer dans « Carte &amp; réglages ».</p>
+    <form class="form" id="form-code"><label class="plein">Nouveau code
+      <input type="password" name="code" autocomplete="new-password" required></label>
+      <label class="plein">Confirme le code
+      <input type="password" name="confirmation" autocomplete="new-password" required></label></form>
+    <div class="actions"><a class="btn" href="#/caisse">Retour à la caisse</a><button class="btn principal" id="btn-code" type="button">Enregistrer le code</button></div>
+  </div></div>` : `<div class="ecran-centre"><div class="fenetre">
     <h3>Espace gérant</h3>
     <p class="discret">Compta, factures, clients, intérim, tâches… Entre le code gérant.</p>
     <form class="form" id="form-code"><label class="plein">Code gérant
-      <input type="password" name="code" autocomplete="current-password" required autofocus></label></form>
+      <input type="password" name="code" autocomplete="current-password" required></label></form>
     <div class="actions"><a class="btn" href="#/caisse">Retour à la caisse</a><button class="btn principal" id="btn-code" type="button">Entrer</button></div>
   </div></div>`;
+  const form = $("#form-code", vue), bouton = $("#btn-code", vue);
   const valider = async () => {
-    const code = $("#form-code").elements.code.value;
+    const code = form.elements.code.value;
     if (!code) return;
-    $("#btn-code").disabled = true;
-    try { await connecter(code); toast("Bienvenue dans l'espace gérant."); afficher(cible); }
-    catch (err) { toast(messageErreur(err), true); $("#form-code").elements.code.select(); }
-    finally { $("#btn-code") && ($("#btn-code").disabled = false); }
+    if (premier && code !== form.elements.confirmation.value) { toast("Les deux codes ne sont pas identiques.", true); return; }
+    bouton.disabled = true;
+    try {
+      if (premier) { await definirCode(code); toast("Code gérant enregistré. Bienvenue !"); }
+      else { await connecter(code); toast("Bienvenue dans l'espace gérant."); }
+      afficher(cible);
+    } catch (err) { toast(messageErreur(err), true); form.elements.code.select(); }
+    finally { bouton.disabled = false; }
   };
-  $("#btn-code").addEventListener("click", valider);
-  $("#form-code").addEventListener("submit", (e) => { e.preventDefault(); valider(); });
-  setTimeout(() => $("#form-code input")?.focus(), 30);
+  bouton.addEventListener("click", valider);
+  form.addEventListener("submit", (e) => { e.preventDefault(); valider(); });
+  form.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); valider(); } });
+  setTimeout(() => form.elements.code.focus(), 30);
 }
 
 async function afficher() {
   const jeton = ++rendu;
   const { id, params } = route();
-  session = await sessionActive();
+  // Pages gérant : on revérifie le jeton auprès de la base (code changé ailleurs, session expirée…)
+  session = await sessionActive(id === "imprimer" || !(PAGES.find((p) => p.id === id) || PAGES[0]).libre);
   if (jeton !== rendu) return;
   dessinerEntete();
   if (typeof nettoyage === "function") { try { nettoyage(); } catch { /* rien */ } }
@@ -93,7 +112,4 @@ $("#puce-compte").addEventListener("click", async () => {
   else location.hash = "#/tableau";
 });
 window.addEventListener("hashchange", afficher);
-sb.auth.onAuthStateChange((evenement) => {
-  if (evenement === "SIGNED_OUT" && route().id !== "caisse") afficher();
-});
 afficher();

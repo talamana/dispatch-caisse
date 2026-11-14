@@ -119,7 +119,8 @@ export async function confirmer(message, texte = "Confirmer", classe = "principa
 export function messageErreur(err) {
   const code = err?.code, msg = err?.message || String(err);
   if (code === "23505") return "Ça existe déjà (nom ou numéro en double).";
-  if (code === "42501" || code === "PGRST301" || /JWT|permission denied/i.test(msg)) return "Accès refusé : reconnecte-toi avec le code gérant.";
+  if (code === "42501" && !/permission denied|row-level security/i.test(msg)) return msg;
+  if (code === "42501" || code === "PGRST301" || /JWT|permission denied|row-level security/i.test(msg)) return "Accès refusé : reconnecte-toi avec le code gérant.";
   if (code === "23503") return "Impossible : cet élément est utilisé ailleurs.";
   if (code === "23514") return "Valeur refusée (montant ou choix invalide).";
   if (/Failed to fetch|NetworkError|Load failed/i.test(msg)) return "Pas de connexion à la base. Réessaie dans un instant.";
@@ -139,6 +140,7 @@ export function formulaire(champs, valeurs = {}) {
     let entree;
     switch (c.type) {
       case "zone": entree = `<textarea ${attr} maxlength="${c.max ?? 1000}">${echapper(v ?? "")}</textarea>`; break;
+      case "motdepasse": entree = `<input ${attr} type="password" autocomplete="new-password" value="">`; break;
       case "argent": entree = `<input ${attr} inputmode="decimal" placeholder="0" value="${echapper(enDollars(v))}">`; break;
       case "nombre": entree = `<input ${attr} type="number" step="any" ${c.min != null ? `min="${c.min}"` : ""} value="${echapper(v ?? "")}">`; break;
       case "date": entree = `<input ${attr} type="date" value="${versChamp(v, false)}">`; break;
