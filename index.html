@@ -23,7 +23,8 @@
     --rayon: 14px;
   }
   * { box-sizing: border-box; }
-  html, body { margin: 0; height: 100%; }
+  html, body { margin: 0; }
+  body { min-height: 100vh; }
   body {
     background: var(--fond);
     color: var(--texte);
@@ -61,7 +62,15 @@
   /* --- Mise en page ----------------------------------------------------------- */
   .caisse { display: grid; grid-template-columns: 1fr 380px; min-height: calc(100vh - 62px); }
   .carte { padding: 18px 20px 120px; min-width: 0; }
-  .onglets { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+  .onglets {
+    position: sticky; top: 62px; z-index: 10;
+    display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none;
+    margin: -18px -20px 14px; padding: 12px 20px;
+    background: rgba(16,18,22,.94); backdrop-filter: blur(6px); border-bottom: 1px solid var(--trait);
+  }
+  .onglets::-webkit-scrollbar { display: none; }
+  .onglet { white-space: nowrap; flex: none; }
+  #rayons > section { scroll-margin-top: 130px; margin-bottom: 28px; }
   .onglet {
     background: var(--panneau); border: 1px solid var(--trait); border-radius: 999px;
     padding: 8px 16px; font-weight: 600; font-size: 14px;
@@ -131,6 +140,15 @@
   }
   .segment button[aria-pressed="true"] { background: #fff; color: #111; border-color: #fff; }
   .client { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .rabais { display: grid; grid-template-columns: 88px auto 1fr; gap: 6px; align-items: stretch; }
+  .rabais input {
+    width: 100%; background: #0d0f12; border: 1px solid var(--trait); border-radius: 10px; padding: 9px 10px; font-size: 14px;
+  }
+  .rabais input:focus { outline: 2px solid var(--rouge); border-color: transparent; }
+  .unite { display: flex; border: 1px solid var(--trait); border-radius: 10px; overflow: hidden; }
+  .unite button { background: var(--panneau-2); border: 0; padding: 0 12px; font-weight: 700; }
+  .unite button[aria-pressed="true"] { background: #fff; color: #111; }
+  .totaux .rang.remise { color: #7ee787; }
   .client select, .client input, .champ {
     width: 100%; background: #0d0f12; border: 1px solid var(--trait); border-radius: 10px; padding: 9px 10px; font-size: 14px;
   }
@@ -155,6 +173,7 @@
   @media (max-width: 880px) {
     .caisse { grid-template-columns: 1fr; }
     .carte { padding: 14px 16px 110px; }
+    .onglets { top: 54px; margin: -14px -16px 12px; padding: 10px 16px; }
     .ticket {
       position: fixed; inset: auto 0 0 0; top: 0; height: 100%; z-index: 30;
       border-left: 0; transform: translateY(100%); transition: transform .25s ease;
@@ -246,10 +265,22 @@
           <input id="nom-client" placeholder="Nom (facultatif)" maxlength="80" autocomplete="off">
         </div>
       </div>
+      <div>
+        <div class="etiquette">Rabais</div>
+        <div class="rabais">
+          <input id="rabais-valeur" type="number" inputmode="decimal" min="0" step="any" placeholder="0" aria-label="Montant du rabais">
+          <div class="unite" role="group" aria-label="Unité du rabais">
+            <button type="button" data-unite="pourcent" aria-pressed="true">%</button>
+            <button type="button" data-unite="montant" aria-pressed="false">$</button>
+          </div>
+          <input id="rabais-motif" placeholder="Motif (facultatif)" maxlength="100" autocomplete="off">
+        </div>
+      </div>
     </div>
     <div class="totaux">
       <div class="rang"><span>Sous-total</span><span id="sous-total">0 $</span></div>
       <div class="rang masque" id="rang-ajust"><span id="libelle-ajust"></span><span id="ajustement"></span></div>
+      <div class="rang remise masque" id="rang-rabais"><span id="libelle-rabais"></span><span id="rabais"></span></div>
       <div class="total"><span>TOTAL</span><strong id="total">0 $</strong></div>
       <button class="encaisser" id="btn-encaisser" type="button" disabled>Encaisser</button>
     </div>
@@ -328,10 +359,11 @@
   let menu = null, articles = {}, ordreArticles = [];
   let panier = new Map();                 // id -> quantité (ordre d'ajout conservé)
   let tarif = "normal";
-  let ongletActif = null;
+  let uniteRabais = "pourcent";            // "pourcent" | "montant"
 
   function sauverBrouillon() {
-    memoire.ecrire(CLE_BROUILLON, { panier: [...panier], tarif, type: $("type-client").value, client: $("nom-client").value });
+    memoire.ecrire(CLE_BROUILLON, { panier: [...panier], tarif, type: $("type-client").value, client: $("nom-client").value,
+      rabais: { unite: uniteRabais, valeur: $("rabais-valeur").value, motif: $("rabais-motif").value } });
   }
 
   function calculer() {
@@ -340,7 +372,22 @@
     const sousTotal = lignes.reduce((s, l) => s + l.montant, 0);
     const t = menu.tarifs.find((x) => x.id === tarif) || menu.tarifs[0];
     const ajustement = Math.round(sousTotal * (t.pourcentage || 0) / 100);
-    return { lignes, sousTotal, ajustement, total: sousTotal + ajustement, tarif: t };
+    const base = sousTotal + ajustement;
+    // Rabais manuel (même calcul que le bot) : % de l'addition, ou montant en $ plafonné à l'addition
+    let valeur = parseFloat(String($("rabais-valeur").value).replace(",", "."));
+    if (!Number.isFinite(valeur) || valeur < 0) valeur = 0;
+    if (uniteRabais === "pourcent") valeur = Math.min(valeur, 100);
+    let rabais = uniteRabais === "pourcent" ? Math.round(base * valeur / 100) : Math.min(Math.round(valeur * 100), base);
+    rabais = Math.max(0, Math.min(rabais, base));
+    const motif = $("rabais-motif").value.trim();
+    return { lignes, sousTotal, ajustement, total: base - rabais, tarif: t,
+             rabais, rabaisValeur: rabais ? valeur : 0, rabaisUnite: uniteRabais, motif };
+  }
+
+  function texteRabais(c) {
+    if (!c.rabais) return "";
+    const base = c.rabaisUnite === "pourcent" ? `Rabais ${String(c.rabaisValeur).replace(".", ",")} %` : "Rabais";
+    return base + (c.motif ? ` (${c.motif})` : "");
   }
 
   function texteTarif(t) {
@@ -355,10 +402,10 @@
     menu.categories.forEach((cat, i) => {
       const id = "cat-" + i;
       const b = document.createElement("button");
-      b.className = "onglet"; b.type = "button"; b.setAttribute("role", "tab");
+      b.className = "onglet"; b.type = "button";
       b.dataset.cible = id;
       b.innerHTML = `${echapper(cat.nom.replace(/\s*!$/, ""))}<span class="nb">${cat.articles.length}</span>`;
-      b.addEventListener("click", () => choisirOnglet(id));
+      b.addEventListener("click", () => $(id).scrollIntoView({ behavior: "smooth", block: "start" }));
       onglets.appendChild(b);
 
       const sec = document.createElement("section");
@@ -380,13 +427,15 @@
       sec.appendChild(grille);
       rayons.appendChild(sec);
     });
-    choisirOnglet(ongletActif || "cat-0");
-  }
-
-  function choisirOnglet(id) {
-    ongletActif = id;
-    document.querySelectorAll(".onglet").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.cible === id)));
-    document.querySelectorAll("#rayons > section").forEach((s) => s.classList.toggle("masque", s.id !== id));
+    // Toute la carte est sur la même page : le raccourci de la section visible s'allume
+    if ("IntersectionObserver" in window) {
+      const obs = new IntersectionObserver((entrees) => {
+        entrees.filter((e) => e.isIntersecting).forEach((e) => {
+          document.querySelectorAll(".onglet").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.cible === e.target.id)));
+        });
+      }, { rootMargin: "-140px 0px -60% 0px" });
+      document.querySelectorAll("#rayons > section").forEach((sec) => obs.observe(sec));
+    }
   }
 
   function afficherOptions() {
@@ -453,6 +502,11 @@
     $("rang-ajust").classList.toggle("masque", !c.ajustement);
     $("libelle-ajust").textContent = texteTarif(c.tarif);
     $("ajustement").textContent = (c.ajustement > 0 ? "+" : "") + fmt(c.ajustement);
+    $("rang-rabais").classList.toggle("masque", !c.rabais);
+    $("libelle-rabais").textContent = texteRabais(c);
+    $("rabais").textContent = "−" + fmt(c.rabais);
+    document.querySelectorAll(".unite button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.unite === uniteRabais)));
+    $("rabais-valeur").max = uniteRabais === "pourcent" ? "100" : "";
     $("total").textContent = fmt(c.total);
     $("btn-encaisser").disabled = !c.lignes.length;
     $("btn-encaisser").textContent = c.lignes.length ? `Encaisser ${fmt(c.total)}` : "Encaisser";
@@ -475,9 +529,11 @@
       lignes: c.lignes.map(({ a, q }) => ({ id: a.id, nom: a.nom, qte: q })),
       tarif: c.tarif.id, type_client: $("type-client").value, client: $("nom-client").value.trim(),
       total: c.total,
+      rabais: c.rabais ? { type: c.rabaisUnite, valeur: c.rabaisValeur, motif: c.motif } : null,
       _affichage: {
         lignes: c.lignes.map(({ a, q, montant }) => `${q}× ${a.nom} — ${fmt(montant)}`),
         ajustement: c.ajustement ? `${texteTarif(c.tarif)} : ${(c.ajustement > 0 ? "+" : "") + fmt(c.ajustement)}` : "",
+        rabais: c.rabais ? `${texteRabais(c)} : −${fmt(c.rabais)}` : "",
       },
     };
   }
@@ -487,6 +543,7 @@
     const donnees = { ...cmd }; delete donnees._affichage;
     const champs = [{ name: "Client", value: `${cmd.client || "De passage"} (${TYPES_CLIENT[cmd.type_client] || cmd.type_client})`, inline: true },
                     { name: "Vendeur", value: cmd.vendeur || "—", inline: true }];
+    if (aff.rabais) champs.unshift({ name: "Rabais", value: aff.rabais.slice(0, 1024), inline: true });
     if (aff.ajustement) champs.unshift({ name: "Tarif", value: aff.ajustement, inline: true });
     const message = {
       username: `Caisse — ${(config && config.e) || "Le Dispatch"}`.slice(0, 80),
@@ -548,8 +605,9 @@
     if (!c.lignes.length) return;
     const recap = c.lignes.map(({ a, q, montant }) => `<div><span>${q}× ${echapper(a.nom)}</span><span>${fmt(montant)}</span></div>`).join("");
     const ajust = c.ajustement ? `<div><span>${echapper(texteTarif(c.tarif))}</span><span>${(c.ajustement > 0 ? "+" : "") + fmt(c.ajustement)}</span></div>` : "";
+    const remise = c.rabais ? `<div style="color:#7ee787"><span>${echapper(texteRabais(c))}</span><span>−${fmt(c.rabais)}</span></div>` : "";
     const client = $("nom-client").value.trim() || "De passage";
-    $("recap").innerHTML = recap + ajust +
+    $("recap").innerHTML = recap + ajust + remise +
       `<div class="tot"><span>TOTAL</span><span>${fmt(c.total)}</span></div>` +
       `<div style="color:var(--discret);margin-top:6px"><span>Client</span><span>${echapper(client)} · ${echapper(TYPES_CLIENT[$("type-client").value])}</span></div>`;
     $("btn-valider").textContent = `Encaisser ${fmt(c.total)}`;
@@ -573,6 +631,7 @@
       ? "Elle arrive sur Discord et sera enregistrée en compta par le bot (tout de suite s'il est en ligne, sinon à son démarrage)."
       : "Pas de connexion pour l'instant : la commande est gardée sur cet appareil et partira automatiquement dès que possible. Ne ferme pas cette page.";
     panier = new Map(); tarif = menu.tarifs[0].id; $("nom-client").value = ""; $("type-client").value = "particulier";
+    $("rabais-valeur").value = ""; $("rabais-motif").value = ""; uniteRabais = "pourcent";
     afficherTicket();
     $("ticket").classList.remove("ouvert");
     montrer("fenetre-resultat");
@@ -629,6 +688,11 @@
       if (menu.tarifs.some((t) => t.id === brouillon.tarif)) tarif = brouillon.tarif;
       if (TYPES_CLIENT[brouillon.type]) $("type-client").value = brouillon.type;
       $("nom-client").value = brouillon.client || "";
+      if (brouillon.rabais) {
+        uniteRabais = brouillon.rabais.unite === "montant" ? "montant" : "pourcent";
+        $("rabais-valeur").value = brouillon.rabais.valeur || "";
+        $("rabais-motif").value = brouillon.rabais.motif || "";
+      }
     }
     afficherTicket();
     montrer("ecran-caisse");
@@ -641,9 +705,16 @@
     $("btn-valider").addEventListener("click", valider);
     $("btn-annuler").addEventListener("click", () => cacher("fenetre-confirmer"));
     $("btn-nouvelle").addEventListener("click", () => cacher("fenetre-resultat"));
-    $("btn-vider").addEventListener("click", () => { panier = new Map(); afficherTicket(); });
+    $("btn-vider").addEventListener("click", () => {
+      panier = new Map(); $("rabais-valeur").value = ""; $("rabais-motif").value = ""; afficherTicket();
+    });
     $("type-client").addEventListener("change", sauverBrouillon);
     $("nom-client").addEventListener("input", sauverBrouillon);
+    $("rabais-valeur").addEventListener("input", afficherTicket);
+    $("rabais-motif").addEventListener("input", afficherTicket);
+    document.querySelectorAll(".unite button").forEach((b) => b.addEventListener("click", () => {
+      uniteRabais = b.dataset.unite; afficherTicket();
+    }));
     $("puce-vendeur").addEventListener("click", demanderVendeur);
     $("btn-vendeur").addEventListener("click", validerVendeur);
     $("champ-vendeur").addEventListener("keydown", (e) => { if (e.key === "Enter") validerVendeur(); });
