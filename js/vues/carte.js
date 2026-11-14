@@ -1,0 +1,105 @@
+// Carte du restaurant (articles, tarifs) et réglages de l'entreprise (Art. III).
+import { q, table } from "../api.js";
+import { $, $$, brancherActions, confirmer, echapper, fmt, formulaire, formulaireEnFenetre, lireFormulaire, tableau, toast } from "../outils.js";
+
+export async function afficher(vue, params) {
+  const onglet = ["tarifs", "reglages"].includes(params[0]) ? params[0] : "articles";
+  vue.innerHTML = `<div class="page"><div class="titre-page"><h1>Carte & réglages</h1></div>
+    <div class="onglets-page"><button data-onglet="articles" aria-selected="${onglet === "articles"}">Articles</button>
+      <button data-onglet="tarifs" aria-selected="${onglet === "tarifs"}">Tarifs</button>
+      <button data-onglet="reglages" aria-selected="${onglet === "reglages"}">Réglages</button></div><div id="contenu"></div></div>`;
+  $$("[data-onglet]", vue).forEach((b) => (b.onclick = () => { location.hash = `#/carte/${b.dataset.onglet}`; }));
+  await ({ articles, tarifs, reglages })[onglet]($("#contenu", vue));
+}
+
+async function articles(zone) {
+  let lignes = [];
+  const champs = (categories) => [
+    { nom: "nom", libelle: "Nom", requis: true },
+    { nom: "prix", libelle: "Prix ($)", type: "argent", requis: true },
+    { nom: "categorie", libelle: "Catégorie (section de la caisse)", requis: true, aide: categories.length ? `Existantes : ${categories.join(", ")}` : "" },
+    { nom: "emoji", libelle: "Emoji", max: 8 },
+    { nom: "contenu", libelle: "Contenu du menu", plein: true },
+    { nom: "ordre", libelle: "Ordre d'affichage", type: "nombre" },
+    { nom: "compact", libelle: "Affichage compact (plats seuls)", type: "case" },
+    { nom: "actif", libelle: "En vente", type: "case" },
+  ];
+  const charger = async () => {
+    lignes = await q(table("articles").select("*").order("ordre").order("nom"));
+    zone.innerHTML = `<div class="bloc"><div class="bloc-tete"><h2 class="titre-bloc">🍔 ${lignes.filter((a) => a.actif).length} articles en vente</h2>
+      <span class="discret">Les changements s'appliquent tout de suite à la caisse.</span><span class="espace"></span>
+      <button class="btn principal" data-action="ajouter">+ Article</button></div>
+      ${tableau(lignes, [
+        { titre: "", rendu: (a) => `<span style="font-size:22px">${echapper(a.emoji || "")}</span>` },
+        { titre: "Article", rendu: (a) => `<strong style="${a.actif ? "" : "opacity:.5"}">${echapper(a.nom)}</strong>${a.contenu ? `<div class="discret">${echapper(a.contenu)}</div>` : ""}` },
+        { titre: "Catégorie", rendu: (a) => echapper(a.categorie) },
+        { titre: "Prix", classe: "droite", rendu: (a) => `<strong>${fmt(a.prix)}</strong>` },
+        { titre: "", rendu: (a) => a.actif ? "" : '<span class="badge">retiré</span>' },
+      ], { actions: () => `<button class="btn petit icone" data-action="modifier" title="Modifier">✏️</button>` })}</div>`;
+  };
+  const categories = () => [...new Set(lignes.map((a) => a.categorie))];
+  brancherActions(zone, () => lignes, {
+    ajouter: () => formulaireEnFenetre("Nouvel article", champs(categories()), { actif: true, ordre: (lignes.at(-1)?.ordre || 0) + 10 }, async (o) => {
+      const id = o.nom.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "") + "_" + Date.now().toString(36).slice(-4);
+      await q(table("articles").insert({ ...o, id, ordre: o.ordre ?? 0 })); toast("Article ajouté à la carte."); charger();
+    }),
+    modifier: (a) => formulaireEnFenetre(`Modifier ${a.nom}`, champs(categories()), a, async (o) => {
+      await q(table("articles").update({ ...o, ordre: o.ordre ?? a.ordre }).eq("id", a.id)); toast("Carte mise à jour."); charger();
+    }),
+  });
+  await charger();
+}
+
+async function tarifs(zone) {
+  let lignes = [];
+  const champs = [
+    { nom: "nom", libelle: "Nom", requis: true },
+    { nom: "court", libelle: "Texte du bouton", requis: true },
+    { nom: "pourcentage", libelle: "Pourcentage (−10 = remise, 10 = majoration)", type: "nombre", requis: true },
+    { nom: "emoji", libelle: "Emoji", max: 8 },
+  ];
+  const charger = async () => {
+    lignes = await q(table("tarifs").select("*").order("ordre"));
+    zone.innerHTML = `<div class="bloc"><div class="bloc-tete"><h2 class="titre-bloc">🧾 Tarifs</h2><span class="discret">Les 3 premiers apparaissent sur la caisse.</span></div>
+      ${tableau(lignes, [
+        { titre: "Tarif", rendu: (t) => `${echapper(t.emoji || "")} <strong>${echapper(t.nom)}</strong>` },
+        { titre: "Bouton", rendu: (t) => echapper(t.court || "") },
+        { titre: "Effet", classe: "droite", rendu: (t) => Number(t.pourcentage) ? `${t.pourcentage > 0 ? "+" : ""}${t.pourcentage} %` : "—" },
+      ], { actions: () => `<button class="btn petit icone" data-action="modifier" title="Modifier">✏️</button>` })}</div>`;
+  };
+  brancherActions(zone, () => lignes, {
+    modifier: (t) => formulaireEnFenetre(`Modifier ${t.nom}`, champs, t, async (o) => {
+      if (!Number.isFinite(o.pourcentage) || Math.abs(o.pourcentage) > 100) throw new Error("Pourcentage entre −100 et 100.");
+      await q(table("tarifs").update(o).eq("id", t.id)); toast("Tarif mis à jour."); charger();
+    }),
+  });
+  await charger();
+}
+
+async function reglages(zone) {
+  const r = await q(table("reglages").select("*").eq("id", 1).single());
+  const champs = [
+    { nom: "entreprise", libelle: "Nom de l'entreprise", requis: true },
+    { nom: "sous_titre", libelle: "Sous-titre" },
+    { nom: "telephones", libelle: "Téléphones (séparés par des virgules)", plein: true },
+    { nom: "mode_impot", libelle: "Calcul de l'impôt", type: "choix", plein: true, options: [
+      ["forfait", "Taux unique : le taux de la tranche atteinte s'applique à tout le bénéfice"],
+      ["tranches", "Barème progressif : chaque tranche à son taux"]] },
+    { nom: "jour_limite", libelle: "Déclaration avant le … du mois suivant", type: "nombre", min: 1 },
+    { nom: "plafond_dons", libelle: "Plafond des dons ($)", type: "nombre", min: 0 },
+    { nom: "periode_dons", libelle: "Plafond des dons calculé", type: "choix", options: [["mois", "par mois"], ["annee", "par an"], ["don", "par don"]] },
+  ];
+  const f = formulaire(champs, { ...r, telephones: (r.telephones || []).join(", ") });
+  zone.innerHTML = `<div class="bloc"><div class="bloc-tete"><h2 class="titre-bloc">⚙️ Réglages</h2></div><div id="form"></div>
+    <p class="discret">Barème (Art. III) : ${r.tranches.map(([p, t], i) => p === null ? `au-delà : ${t * 100} %` : `${i ? "jusqu'à" : "jusqu'à"} ${fmt(p * 100)} : ${t * 100} %`).join(" · ")}</p>
+    <div style="display:flex;justify-content:flex-end"><button class="btn principal" id="enregistrer">Enregistrer</button></div></div>`;
+  $("#form", zone).appendChild(f);
+  $("#enregistrer", zone).onclick = async () => {
+    try {
+      const o = lireFormulaire(f, champs);
+      o.telephones = (o.telephones || "").split(",").map((t) => t.trim()).filter(Boolean);
+      if (!(o.jour_limite >= 1 && o.jour_limite <= 28)) throw new Error("Le jour limite doit être entre 1 et 28.");
+      await q(table("reglages").update(o).eq("id", 1)); toast("Réglages enregistrés.");
+    } catch (e) { toast(e.message, true); }
+  };
+}
