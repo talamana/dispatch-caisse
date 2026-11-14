@@ -4,6 +4,7 @@ import { $, echapper, messageErreur, toast } from "./outils.js";
 
 const PAGES = [
   { id: "caisse", titre: "Caisse", libre: true, module: () => import("./vues/caisse.js") },
+  { id: "cuisine", titre: "Cuisine", libre: true, module: () => import("./vues/cuisine.js") },
   { id: "tableau", titre: "Tableau de bord", module: () => import("./vues/tableau.js") },
   { id: "compta", titre: "Compta", module: () => import("./vues/compta.js") },
   { id: "factures", titre: "Devis & factures", module: () => import("./vues/documents.js") },
@@ -27,9 +28,10 @@ function dessinerEntete() {
   const visibles = session ? PAGES : PAGES.filter((p) => p.libre);
   $("#nav").innerHTML = visibles.map((p) =>
     `<a href="#/${p.id}" ${p.id === id ? 'aria-current="page"' : ""}>${echapper(p.titre)}</a>`).join("")
-    + (session ? "" : `<a href="#/tableau" ${id !== "caisse" ? 'aria-current="page"' : ""}>Espace gérant</a>`);
+    + (session ? "" : `<a href="#/tableau" ${!PAGES.some((p) => p.libre && p.id === id) ? 'aria-current="page"' : ""}>Espace gérant</a>`);
   const compte = $("#puce-compte");
-  compte.innerHTML = session ? "🔓 Gérant · Déconnexion" : "🔒 Gérant";
+  compte.innerHTML = session ? '🔓<span class="texte-compte"> Gérant · Déconnexion</span>' : '🔒<span class="texte-compte"> Gérant</span>';
+  $("#nav [aria-current]")?.scrollIntoView({ inline: "center", block: "nearest" });   // menu étroit (téléphone)
   compte.title = session ? "Se déconnecter de l'espace gérant" : "Ouvrir l'espace gérant";
 }
 

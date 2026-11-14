@@ -194,7 +194,7 @@ async function encaisser() {
     titre: gardee ? "Commande gardée" : `Commande n°${resultat.vente_id} — ${fmt(resultat.total)}`,
     contenu: `<div class="grosse-coche${gardee ? " attente" : ""}">${gardee ? "⏳" : "✓"}</div><p class="discret" style="text-align:center">${gardee
       ? "Pas de connexion pour l'instant : la commande est gardée sur cet appareil et sera enregistrée automatiquement dès que possible."
-      : "Enregistrée en compta."}</p>`,
+      : "Enregistrée en compta et envoyée en cuisine 🍳."}</p>`,
     boutons: [{ texte: "Nouvelle commande", classe: "principal" }],
   });
 }

@@ -223,6 +223,7 @@ table.liste tfoot td { font-weight: 700; border-top: 1px solid var(--trait); bor
 .grosse-coche.attente { background: var(--orange); }
 .barre-mobile { display: none; }
 .fermer-ticket { display: none; }
+@media (max-width: 560px) { .texte-compte { display: none; } .logo { font-size: 19px !important; } }
 
 @media (max-width: 880px) {
   :root { --entete: 56px; }
@@ -243,6 +244,50 @@ table.liste tfoot td { font-weight: 700; border-top: 1px solid var(--trait); bor
   }
   .barre-mobile strong { font-family: "Anton", sans-serif; font-weight: 400; font-size: 22px; }
   .masque-mobile { display: none !important; }
+}
+
+/* --- Cuisine ------------------------------------------------------------------------------- */
+.page.large { max-width: 1500px; }
+.cuisine { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 18px; align-items: start; }
+.besoins { position: sticky; top: calc(var(--entete) + 14px); max-height: calc(100vh - var(--entete) - 28px); overflow: auto; }
+.besoins .case { display: flex; align-items: center; gap: 8px; margin: 4px 0 10px; font-size: 14px; }
+.sous-titre { font-size: 13px; text-transform: uppercase; letter-spacing: 1px; color: var(--discret); margin: 16px 0 6px; font-weight: 600; }
+table.liste.compacte td { padding: 6px 8px; }
+table.liste.compacte th { padding: 6px 8px; }
+.actions-ligne { display: flex; justify-content: flex-end; margin-top: 12px; }
+.filtres { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+.puce-filtre { background: var(--panneau); border: 1px solid var(--trait); border-radius: 999px; padding: 6px 14px; font-weight: 600; font-size: 14px; }
+.puce-filtre b { margin-left: 4px; color: var(--discret); }
+.puce-filtre[aria-pressed="true"] { background: var(--panneau-2); border-color: var(--rouge); }
+.bons { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 14px; }
+.bon { background: var(--panneau); border: 1px solid var(--trait); border-top: 4px solid var(--rouge); border-radius: var(--rayon); padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; }
+.bon.en_cours { border-top-color: var(--orange); }
+.bon.prete { border-top-color: var(--vert); opacity: .85; }
+.bon.nouvelle { animation: arrivee 1.2s ease 2; }
+@keyframes arrivee { 50% { box-shadow: 0 0 0 4px rgba(232,33,43,.45); } }
+.bon header { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.bon header .case { display: flex; align-items: center; gap: 6px; font-size: 18px; }
+.bon header .espace { flex: 1; }
+.bon .qui { font-size: 13px; }
+.plats { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.plats li { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 7px 8px; border-radius: 10px; background: var(--panneau-2); }
+.plats li label { flex: 1; display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 15px; }
+.plats li input, .bon header input, .besoins input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--vert); }
+.plats li.fait label { text-decoration: line-through; color: var(--discret); }
+.plats .menus { flex-basis: 100%; padding-left: 26px; font-size: 12px; }
+.lien { background: none; border: 0; padding: 0 4px; font-size: 15px; }
+.bon footer { display: flex; gap: 6px; justify-content: flex-end; flex-wrap: wrap; margin-top: auto; }
+.grille-recettes { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; margin-top: 14px; }
+.recette { background: var(--panneau); border: 1px solid var(--trait); border-radius: var(--rayon); padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+.recette.choisie { border-color: var(--vert); }
+.recette header { display: flex; justify-content: space-between; gap: 6px; align-items: flex-start; }
+.recette ul { margin: 0; padding-left: 18px; font-size: 13px; color: var(--discret); flex: 1; }
+.recette .stepper { justify-content: flex-end; }
+.recette .stepper span { min-width: 28px; text-align: center; font-weight: 700; }
+.liste-ingredients { padding-left: 18px; margin: 6px 0 0; line-height: 1.9; }
+@media (max-width: 880px) {
+  .cuisine { grid-template-columns: 1fr; }
+  .besoins { position: static; max-height: none; }
 }
 
 /* --- Impression (factures, devis, déclarations) ------------------------------------------- */

@@ -177,7 +177,7 @@ export async function formulaireEnFenetre(titre, champs, valeurs, enregistrer, l
   const f = formulaire(champs, valeurs);
   return fenetre({ titre, contenu: f, large, boutons: [
     { texte: "Annuler" },
-    { texte: "Enregistrer", classe: "principal", action: async () => { await enregistrer(lireFormulaire(f, champs)); } },
+    { texte: "Enregistrer", classe: "principal", action: async () => ((await enregistrer(lireFormulaire(f, champs))) === false ? false : undefined) },
   ], quandOuverte: () => f.addEventListener("keydown", (e) => {
     if (e.key === "Enter" && e.target.tagName === "INPUT") { e.preventDefault(); f.closest(".fenetre").querySelector(".actions .principal").click(); }
   }) });
