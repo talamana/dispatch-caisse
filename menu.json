@@ -1,0 +1,291 @@
+{
+  "titre": "Le Dispatch",
+  "sous_titre": "Diner — commandes à emporter",
+  "telephones": [
+    "(666) 307-6669",
+    "(666) 568-2789",
+    "(666) 158-7021"
+  ],
+  "image": "assets/menu.jpg",
+  "categories": [
+    {
+      "nom": "Menus",
+      "liste": "Menus & équipes",
+      "articles": [
+        {
+          "id": "cadet",
+          "nom": "Le Cadet",
+          "prix": 55,
+          "emoji": "🐥",
+          "contenu": "Nuggets, chocolat chaud, compote"
+        },
+        {
+          "id": "officier",
+          "nom": "L'Officier",
+          "prix": 70,
+          "emoji": "🍗",
+          "contenu": "Bucket de poulet, orangeade, donut"
+        },
+        {
+          "id": "interne",
+          "nom": "L'Interne",
+          "prix": 65,
+          "emoji": "🍕",
+          "contenu": "Pizza fruitée, milkshake à la fraise, brochette de fruits"
+        },
+        {
+          "id": "sergent",
+          "nom": "Le Sergent",
+          "prix": 75,
+          "emoji": "🍔",
+          "contenu": "ClassiQ, limonade à la pomme, crêpe au chocolat"
+        },
+        {
+          "id": "etat_major",
+          "nom": "L'État-Major",
+          "prix": 120,
+          "emoji": "🥂",
+          "contenu": "Gaspacho, porc farci à l'orange, cocktail sans alcool, fondant au chocolat — cigare offert"
+        },
+        {
+          "id": "recrue",
+          "nom": "La Recrue",
+          "prix": 65,
+          "emoji": "🥩",
+          "contenu": "Steak frites, limonade, cookie"
+        },
+        {
+          "id": "deputy",
+          "nom": "Le Deputy",
+          "prix": 50,
+          "emoji": "🌭",
+          "contenu": "Corn dog, café au miel, churros"
+        },
+        {
+          "id": "medecin",
+          "nom": "Le Médecin",
+          "prix": 75,
+          "emoji": "🥬",
+          "contenu": "Burger végé/frites, fraistèque, dango fruité"
+        },
+        {
+          "id": "detective",
+          "nom": "Le Détective",
+          "prix": 55,
+          "emoji": "🥗",
+          "contenu": "Salade fraîcheur, café liégeois, salade de fruits"
+        },
+        {
+          "id": "detenu",
+          "nom": "Spécial Détenu",
+          "prix": 45,
+          "emoji": "🔒",
+          "contenu": "Chili con carne, boisson détox"
+        }
+      ]
+    },
+    {
+      "nom": "Choisissez votre équipe !",
+      "liste": "Menus & équipes",
+      "articles": [
+        {
+          "id": "team_crit_swat",
+          "nom": "Team CRIT/SWAT",
+          "prix": 70,
+          "emoji": "🚔",
+          "contenu": "Cheeseburger/frites, la Douce, cheese-cake"
+        },
+        {
+          "id": "team_bci_be",
+          "nom": "Team BCI/BE",
+          "prix": 70,
+          "emoji": "🔎",
+          "contenu": "Pizza jambon, jus d'orange, gaufre nature"
+        },
+        {
+          "id": "team_medecine_legale",
+          "nom": "Team Médecine Légale",
+          "prix": 70,
+          "emoji": "🔬",
+          "contenu": "Lasagne, milkshake à la fraise, mochi fraise-chocolat"
+        },
+        {
+          "id": "team_psychologie",
+          "nom": "Team Psychologie",
+          "prix": 70,
+          "emoji": "🧠",
+          "contenu": "Nouilles, chocolat chaud, riz au lait"
+        }
+      ]
+    },
+    {
+      "nom": "Menu don du sang",
+      "liste": "Menus & équipes",
+      "articles": [
+        {
+          "id": "don_du_sang",
+          "nom": "Menu don du sang",
+          "prix": 30,
+          "emoji": "🩸",
+          "contenu": "Chocolat chaud, compote"
+        }
+      ]
+    },
+    {
+      "nom": "Plats seuls",
+      "liste": "Plats seuls",
+      "compact": true,
+      "articles": [
+        {
+          "id": "p_cheeseburger",
+          "nom": "Cheeseburger/Frites",
+          "prix": 30,
+          "emoji": "🍔"
+        },
+        {
+          "id": "p_bucket",
+          "nom": "Bucket de poulet",
+          "prix": 30,
+          "emoji": "🍗"
+        },
+        {
+          "id": "p_corn_dog",
+          "nom": "Corn dog",
+          "prix": 20,
+          "emoji": "🌭"
+        },
+        {
+          "id": "p_classiq",
+          "nom": "ClassiQ",
+          "prix": 25,
+          "emoji": "🥪"
+        },
+        {
+          "id": "p_lasagnes",
+          "nom": "Lasagnes",
+          "prix": 35,
+          "emoji": "🍝"
+        },
+        {
+          "id": "p_pizza_jambon",
+          "nom": "Pizza jambon",
+          "prix": 35,
+          "emoji": "🍕"
+        },
+        {
+          "id": "p_salade",
+          "nom": "Salade fraîcheur",
+          "prix": 15,
+          "emoji": "🥗"
+        },
+        {
+          "id": "p_donut",
+          "nom": "Donut à la fraise",
+          "prix": 30,
+          "emoji": "🍩"
+        },
+        {
+          "id": "p_churros",
+          "nom": "Churros",
+          "prix": 30,
+          "emoji": "🥨"
+        },
+        {
+          "id": "p_crepe",
+          "nom": "Crêpe au chocolat",
+          "prix": 40,
+          "emoji": "🥞"
+        },
+        {
+          "id": "p_compote",
+          "nom": "Compote",
+          "prix": 20,
+          "emoji": "🍎"
+        },
+        {
+          "id": "p_cookie",
+          "nom": "Cookie",
+          "prix": 30,
+          "emoji": "🍪"
+        },
+        {
+          "id": "p_brochette",
+          "nom": "Brochette de fruits",
+          "prix": 30,
+          "emoji": "🍢"
+        },
+        {
+          "id": "p_fondant",
+          "nom": "Fondant au chocolat",
+          "prix": 40,
+          "emoji": "🍫"
+        },
+        {
+          "id": "p_cocktail",
+          "nom": "Cocktail sans alcool",
+          "prix": 30,
+          "emoji": "🍹"
+        },
+        {
+          "id": "p_chocolat_chaud",
+          "nom": "Chocolat chaud",
+          "prix": 25,
+          "emoji": "☕"
+        },
+        {
+          "id": "p_milkshake",
+          "nom": "Milkshake à la fraise",
+          "prix": 30,
+          "emoji": "🥤"
+        },
+        {
+          "id": "p_cafe_liegeois",
+          "nom": "Café liégeois",
+          "prix": 25,
+          "emoji": "🍨"
+        },
+        {
+          "id": "p_limonade",
+          "nom": "Limonade",
+          "prix": 25,
+          "emoji": "🍋"
+        },
+        {
+          "id": "p_orangeade",
+          "nom": "Orangeade",
+          "prix": 25,
+          "emoji": "🍊"
+        },
+        {
+          "id": "p_cafe_miel",
+          "nom": "Café au miel",
+          "prix": 25,
+          "emoji": "🍯"
+        }
+      ]
+    }
+  ],
+  "tarifs": [
+    {
+      "id": "normal",
+      "nom": "Tarif normal",
+      "pourcentage": 0,
+      "emoji": "🧾",
+      "court": "Normal"
+    },
+    {
+      "id": "public",
+      "nom": "Services publics",
+      "pourcentage": -10,
+      "emoji": "🚓",
+      "court": "Public −10 %"
+    },
+    {
+      "id": "gang",
+      "nom": "Membres de gangs",
+      "pourcentage": 10,
+      "emoji": "💀",
+      "court": "Gang +10 %"
+    }
+  ]
+}

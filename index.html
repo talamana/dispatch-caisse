@@ -1,0 +1,665 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Caisse — Le Dispatch</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --fond: #101216;
+    --panneau: #191c22;
+    --panneau-2: #22262e;
+    --trait: #2e333c;
+    --texte: #f4f5f7;
+    --discret: #9aa3ad;
+    --rouge: #e8212b;
+    --rouge-fonce: #b9141d;
+    --vert: #2ea043;
+    --orange: #d29922;
+    --rayon: 14px;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: var(--fond);
+    color: var(--texte);
+    font: 15px/1.4 "Poppins", system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  button, input, select { font: inherit; color: inherit; }
+  button { cursor: pointer; }
+  .masque { display: none !important; }
+
+  /* --- En-tête ------------------------------------------------------------- */
+  header {
+    position: sticky; top: 0; z-index: 20;
+    display: flex; align-items: center; gap: 16px;
+    padding: 12px 20px;
+    background: linear-gradient(180deg, #16181d, #121418);
+    border-bottom: 3px solid var(--rouge);
+  }
+  .logo { font-family: "Anton", sans-serif; font-size: 30px; letter-spacing: 1px; line-height: 1; white-space: nowrap; }
+  .logo span { color: var(--rouge); }
+  .badge-caisse {
+    background: var(--rouge); color: #fff; font-weight: 700; font-size: 11px;
+    letter-spacing: 1.5px; padding: 4px 8px; border-radius: 4px; text-transform: uppercase;
+  }
+  .espace { flex: 1; }
+  .puce {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: var(--panneau-2); border: 1px solid var(--trait);
+    border-radius: 999px; padding: 6px 12px; font-size: 13px; white-space: nowrap;
+  }
+  .puce .point { width: 8px; height: 8px; border-radius: 50%; background: var(--vert); }
+  .puce.attente .point { background: var(--orange); }
+  button.puce:hover { border-color: var(--discret); }
+
+  /* --- Mise en page ----------------------------------------------------------- */
+  .caisse { display: grid; grid-template-columns: 1fr 380px; min-height: calc(100vh - 62px); }
+  .carte { padding: 18px 20px 120px; min-width: 0; }
+  .onglets { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+  .onglet {
+    background: var(--panneau); border: 1px solid var(--trait); border-radius: 999px;
+    padding: 8px 16px; font-weight: 600; font-size: 14px;
+  }
+  .onglet[aria-selected="true"] { background: var(--rouge); border-color: var(--rouge); color: #fff; }
+  .onglet .nb { opacity: .7; font-weight: 500; margin-left: 4px; }
+
+  .titre-cat { font-family: "Anton", sans-serif; font-size: 22px; letter-spacing: .5px; margin: 6px 0 12px; }
+  .grille { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px; }
+  .tuile {
+    position: relative; text-align: left;
+    background: var(--panneau); border: 1px solid var(--trait); border-radius: var(--rayon);
+    padding: 14px 14px 12px; min-height: 128px;
+    display: flex; flex-direction: column; gap: 6px;
+    transition: transform .08s ease, border-color .15s ease, background .15s ease;
+  }
+  .tuile:hover { border-color: var(--rouge); background: #1e2128; }
+  .tuile:active { transform: scale(.97); }
+  .tuile .emoji { font-size: 28px; line-height: 1; }
+  .tuile .nom { font-weight: 700; font-size: 15px; }
+  .tuile .contenu { color: var(--discret); font-size: 12px; flex: 1; }
+  .tuile .prix { font-family: "Anton", sans-serif; color: var(--rouge); font-size: 20px; letter-spacing: .5px; }
+  .tuile .qte-badge {
+    position: absolute; top: 10px; right: 10px;
+    background: var(--rouge); color: #fff; font-weight: 700; font-size: 13px;
+    min-width: 28px; height: 28px; border-radius: 14px; padding: 0 8px;
+    display: grid; place-items: center;
+  }
+  .grille.compacte { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); }
+  .grille.compacte .tuile { min-height: 96px; }
+
+  /* --- Ticket ----------------------------------------------------------------- */
+  .ticket {
+    position: sticky; top: 62px; height: calc(100vh - 62px);
+    background: var(--panneau); border-left: 1px solid var(--trait);
+    display: flex; flex-direction: column;
+  }
+  .ticket-tete { display: flex; align-items: center; justify-content: space-between; padding: 16px 18px 8px; }
+  .ticket-tete h2 { font-family: "Anton", sans-serif; font-weight: 400; font-size: 24px; margin: 0; letter-spacing: .5px; }
+  .lien { background: none; border: 0; color: var(--discret); text-decoration: underline; padding: 4px; font-size: 13px; }
+  .lien:hover { color: var(--texte); }
+  .lignes { flex: 1; overflow-y: auto; padding: 4px 18px; }
+  .vide { color: var(--discret); text-align: center; padding: 40px 10px; font-size: 14px; }
+  .ligne { display: grid; grid-template-columns: 1fr auto; gap: 6px 10px; padding: 10px 0; border-bottom: 1px dashed var(--trait); }
+  .ligne .nom { font-weight: 600; font-size: 14px; }
+  .ligne .montant { font-weight: 700; text-align: right; }
+  .stepper { display: flex; align-items: center; gap: 4px; }
+  .stepper button {
+    width: 32px; height: 32px; border-radius: 8px;
+    background: var(--panneau-2); border: 1px solid var(--trait); font-size: 18px; line-height: 1;
+  }
+  .stepper button:hover { border-color: var(--discret); }
+  .stepper input {
+    width: 56px; height: 32px; text-align: center; font-weight: 700;
+    background: #0d0f12; border: 1px solid var(--trait); border-radius: 8px;
+  }
+  .stepper input:focus { outline: 2px solid var(--rouge); border-color: transparent; }
+  .stepper .retirer { margin-left: 6px; color: var(--discret); text-decoration: none; }
+  .ligne .pu { color: var(--discret); font-size: 12px; text-align: right; align-self: center; }
+
+  .options { padding: 12px 18px; border-top: 1px solid var(--trait); display: grid; gap: 10px; }
+  .etiquette { font-size: 12px; color: var(--discret); margin-bottom: 4px; text-transform: uppercase; letter-spacing: 1px; }
+  .segment { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  .segment button {
+    background: var(--panneau-2); border: 1px solid var(--trait); border-radius: 10px;
+    padding: 8px 4px; font-size: 13px; font-weight: 600;
+  }
+  .segment button[aria-pressed="true"] { background: #fff; color: #111; border-color: #fff; }
+  .client { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .client select, .client input, .champ {
+    width: 100%; background: #0d0f12; border: 1px solid var(--trait); border-radius: 10px; padding: 9px 10px; font-size: 14px;
+  }
+  .client select:focus, .client input:focus, .champ:focus { outline: 2px solid var(--rouge); border-color: transparent; }
+
+  .totaux { padding: 12px 18px 18px; border-top: 1px solid var(--trait); }
+  .totaux .rang { display: flex; justify-content: space-between; color: var(--discret); font-size: 14px; }
+  .totaux .total { display: flex; justify-content: space-between; align-items: baseline; margin: 8px 0 12px; }
+  .totaux .total span:first-child { font-weight: 700; letter-spacing: 1px; }
+  .totaux .total strong { font-family: "Anton", sans-serif; font-weight: 400; font-size: 38px; color: var(--texte); letter-spacing: .5px; }
+  .encaisser {
+    width: 100%; border: 0; border-radius: var(--rayon);
+    background: var(--rouge); color: #fff; padding: 16px; font-size: 18px; font-weight: 700; letter-spacing: .5px;
+    box-shadow: 0 6px 0 var(--rouge-fonce);
+  }
+  .encaisser:hover { filter: brightness(1.08); }
+  .encaisser:active { transform: translateY(3px); box-shadow: 0 3px 0 var(--rouge-fonce); }
+  .encaisser:disabled { background: #3a3f48; box-shadow: none; color: #8a919b; cursor: not-allowed; transform: none; }
+
+  /* --- Barre mobile ------------------------------------------------------------ */
+  .barre-mobile { display: none; }
+  @media (max-width: 880px) {
+    .caisse { grid-template-columns: 1fr; }
+    .carte { padding: 14px 16px 110px; }
+    .ticket {
+      position: fixed; inset: auto 0 0 0; top: 0; height: 100%; z-index: 30;
+      border-left: 0; transform: translateY(100%); transition: transform .25s ease;
+    }
+    .ticket.ouvert { transform: none; }
+    .barre-mobile {
+      display: flex; position: fixed; left: 12px; right: 12px; bottom: 12px; z-index: 25;
+      background: var(--rouge); color: #fff; border: 0; border-radius: var(--rayon);
+      padding: 14px 18px; font-weight: 700; justify-content: space-between; align-items: center;
+      box-shadow: 0 10px 30px rgba(0,0,0,.5);
+    }
+    .barre-mobile strong { font-family: "Anton", sans-serif; font-weight: 400; font-size: 22px; }
+    .logo { font-size: 24px; }
+    .badge-caisse { display: none; }
+    header { padding: 10px 16px; gap: 10px; }
+    .grille { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+  }
+  @media (min-width: 881px) { .fermer-ticket { display: none; } }
+
+  /* --- Fenêtres ---------------------------------------------------------------- */
+  .voile {
+    position: fixed; inset: 0; z-index: 50; background: rgba(5,6,8,.78);
+    display: grid; place-items: center; padding: 16px;
+  }
+  .fenetre {
+    width: min(460px, 100%); background: var(--panneau); border: 1px solid var(--trait);
+    border-top: 4px solid var(--rouge); border-radius: var(--rayon); padding: 24px;
+  }
+  .fenetre h3 { font-family: "Anton", sans-serif; font-weight: 400; font-size: 28px; margin: 0 0 6px; letter-spacing: .5px; }
+  .fenetre p { color: var(--discret); margin: 0 0 16px; }
+  .fenetre .actions { display: flex; gap: 10px; margin-top: 18px; }
+  .fenetre .actions button { flex: 1; }
+  .secondaire {
+    background: var(--panneau-2); border: 1px solid var(--trait); border-radius: var(--rayon); padding: 14px; font-weight: 600;
+  }
+  .recap { background: #0d0f12; border-radius: 10px; padding: 12px 14px; font-size: 14px; }
+  .recap div { display: flex; justify-content: space-between; gap: 10px; }
+  .recap .tot { border-top: 1px dashed var(--trait); margin-top: 8px; padding-top: 8px; font-weight: 700; }
+  .grosse-coche {
+    width: 64px; height: 64px; border-radius: 50%; background: var(--vert);
+    display: grid; place-items: center; font-size: 34px; margin-bottom: 10px; color: #fff;
+  }
+  .grosse-coche.attente { background: var(--orange); }
+  .ecran-plein { min-height: calc(100vh - 62px); display: grid; place-items: center; padding: 20px; }
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">LE <span>DISPATCH</span></div>
+  <span class="badge-caisse">Caisse</span>
+  <div class="espace"></div>
+  <button class="puce" id="puce-etat" type="button" title="État des envois"><span class="point"></span><span id="texte-etat">Prêt</span></button>
+  <button class="puce" id="puce-vendeur" type="button" title="Changer de vendeur">👤 <span id="nom-vendeur">—</span></button>
+</header>
+
+<!-- Site pas encore branché -->
+<section id="ecran-activation" class="ecran-plein masque">
+  <div class="fenetre">
+    <h3>Caisse pas encore branchée</h3>
+    <p>Le fichier <strong>config.json</strong> est introuvable. Le gérant doit taper <code>/caisse site</code> sur Discord, puis envoyer le dossier <code>site</code> (avec config.json) sur GitHub.</p>
+  </div>
+</section>
+
+<!-- Caisse -->
+<main id="ecran-caisse" class="caisse masque">
+  <section class="carte">
+    <div class="onglets" role="tablist" id="onglets"></div>
+    <div id="rayons"></div>
+  </section>
+
+  <aside class="ticket" id="ticket" aria-label="Commande en cours">
+    <div class="ticket-tete">
+      <h2>Commande</h2>
+      <div>
+        <button class="lien" id="btn-vider" type="button">Vider</button>
+        <button class="lien fermer-ticket" id="btn-fermer-ticket" type="button">Fermer ✕</button>
+      </div>
+    </div>
+    <div class="lignes" id="lignes"></div>
+    <div class="options">
+      <div>
+        <div class="etiquette">Tarif</div>
+        <div class="segment" id="tarifs"></div>
+      </div>
+      <div>
+        <div class="etiquette">Client</div>
+        <div class="client">
+          <select id="type-client" aria-label="Type de client"></select>
+          <input id="nom-client" placeholder="Nom (facultatif)" maxlength="80" autocomplete="off">
+        </div>
+      </div>
+    </div>
+    <div class="totaux">
+      <div class="rang"><span>Sous-total</span><span id="sous-total">0 $</span></div>
+      <div class="rang masque" id="rang-ajust"><span id="libelle-ajust"></span><span id="ajustement"></span></div>
+      <div class="total"><span>TOTAL</span><strong id="total">0 $</strong></div>
+      <button class="encaisser" id="btn-encaisser" type="button" disabled>Encaisser</button>
+    </div>
+  </aside>
+  <button class="barre-mobile" id="barre-mobile" type="button"><span id="barre-nb">Panier vide</span><strong id="barre-total">0 $</strong></button>
+</main>
+
+<!-- Fenêtres -->
+<div class="voile masque" id="fenetre-vendeur">
+  <div class="fenetre">
+    <h3>Qui est à la caisse ?</h3>
+    <p>Ton nom apparaîtra sur les tickets et dans les ventes par vendeur.</p>
+    <input class="champ" id="champ-vendeur" maxlength="60" placeholder="Prénom Nom (RP)" autocomplete="off">
+    <div class="actions"><button class="encaisser" id="btn-vendeur" type="button">Commencer</button></div>
+  </div>
+</div>
+
+<div class="voile masque" id="fenetre-confirmer">
+  <div class="fenetre">
+    <h3>Encaisser ?</h3>
+    <div class="recap" id="recap"></div>
+    <div class="actions">
+      <button class="secondaire" id="btn-annuler" type="button">Retour</button>
+      <button class="encaisser" id="btn-valider" type="button">Encaisser</button>
+    </div>
+  </div>
+</div>
+
+<div class="voile masque" id="fenetre-resultat">
+  <div class="fenetre" style="text-align:center">
+    <div class="grosse-coche" id="coche" style="margin:0 auto 10px">✓</div>
+    <h3 id="resultat-titre">Commande envoyée</h3>
+    <p id="resultat-texte"></p>
+    <div class="actions"><button class="encaisser" id="btn-nouvelle" type="button">Nouvelle commande</button></div>
+  </div>
+</div>
+
+<script>
+(() => {
+  "use strict";
+
+  // --- Stockage local (protégé : peut être indisponible) --------------------------
+  const memoire = {
+    lire(cle, defaut) { try { const v = localStorage.getItem(cle); return v === null ? defaut : JSON.parse(v); } catch { return defaut; } },
+    ecrire(cle, val) { try { localStorage.setItem(cle, JSON.stringify(val)); } catch { /* stockage indisponible */ } },
+    effacer(cle) { try { localStorage.removeItem(cle); } catch { /* idem */ } },
+  };
+  const CLE_CONFIG = "dispatch_config", CLE_VENDEUR = "dispatch_vendeur", CLE_FILE = "dispatch_file",
+        CLE_BROUILLON = "dispatch_brouillon";
+
+  const $ = (id) => document.getElementById(id);
+  const TYPES_CLIENT = {
+    particulier: "Particulier", entreprise: "Entreprise", auto_entreprise: "Auto-entreprise",
+    micro_entreprise: "Micro-entreprise", association: "Association", parti_politique: "Parti politique", syndicat: "Syndicat",
+  };
+
+  // --- Argent : centimes -> « 1 234,50 $ » (comme le bot) -----------------------------
+  function fmt(c) {
+    const signe = c < 0 ? "-" : "";
+    c = Math.abs(Math.round(c));
+    const dollars = Math.floor(c / 100), cents = c % 100;
+    let t = String(dollars).replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+    if (cents) t += "," + String(cents).padStart(2, "0");
+    return `${signe}${t} $`;
+  }
+  const echapper = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+  // --- Branchement : l'adresse du webhook est dans config.json (écrit par /caisse site) ---
+  function configValide(cfg) {
+    return !!cfg && (/^https:\/\/(?:(?:ptb|canary)\.)?discord(?:app)?\.com\/api\/webhooks\/\d+\/[\w-]+$/.test(cfg.w || "")
+                  || /^http:\/\/127\.0\.0\.1:\d+\/api\/webhooks\/\d+\/[\w-]+$/.test(cfg.w || ""));
+  }
+  let config = null;
+
+  // --- État de la caisse -----------------------------------------------------------
+  let menu = null, articles = {}, ordreArticles = [];
+  let panier = new Map();                 // id -> quantité (ordre d'ajout conservé)
+  let tarif = "normal";
+  let ongletActif = null;
+
+  function sauverBrouillon() {
+    memoire.ecrire(CLE_BROUILLON, { panier: [...panier], tarif, type: $("type-client").value, client: $("nom-client").value });
+  }
+
+  function calculer() {
+    const lignes = [...panier].filter(([id, q]) => articles[id] && q > 0)
+      .map(([id, q]) => ({ a: articles[id], q, montant: articles[id].prixC * q }));
+    const sousTotal = lignes.reduce((s, l) => s + l.montant, 0);
+    const t = menu.tarifs.find((x) => x.id === tarif) || menu.tarifs[0];
+    const ajustement = Math.round(sousTotal * (t.pourcentage || 0) / 100);
+    return { lignes, sousTotal, ajustement, total: sousTotal + ajustement, tarif: t };
+  }
+
+  function texteTarif(t) {
+    if (!t.pourcentage) return t.nom;
+    return `${t.nom} ${t.pourcentage > 0 ? "+" : "−"}${Math.abs(t.pourcentage)} %`;
+  }
+
+  // --- Affichage de la carte ------------------------------------------------------------
+  function afficherCarte() {
+    const onglets = $("onglets"), rayons = $("rayons");
+    onglets.innerHTML = ""; rayons.innerHTML = "";
+    menu.categories.forEach((cat, i) => {
+      const id = "cat-" + i;
+      const b = document.createElement("button");
+      b.className = "onglet"; b.type = "button"; b.setAttribute("role", "tab");
+      b.dataset.cible = id;
+      b.innerHTML = `${echapper(cat.nom.replace(/\s*!$/, ""))}<span class="nb">${cat.articles.length}</span>`;
+      b.addEventListener("click", () => choisirOnglet(id));
+      onglets.appendChild(b);
+
+      const sec = document.createElement("section");
+      sec.id = id;
+      sec.innerHTML = `<h2 class="titre-cat">${echapper(cat.nom)}</h2>`;
+      const grille = document.createElement("div");
+      grille.className = "grille" + (cat.compact ? " compacte" : "");
+      cat.articles.forEach((a) => {
+        const t = document.createElement("button");
+        t.type = "button"; t.className = "tuile"; t.dataset.id = a.id;
+        t.innerHTML = `<span class="emoji">${echapper(a.emoji || "🍽️")}</span>
+          <span class="nom">${echapper(a.nom)}</span>
+          ${a.contenu ? `<span class="contenu">${echapper(a.contenu)}</span>` : `<span class="contenu"></span>`}
+          <span class="prix">${fmt(Math.round(a.prix * 100))}</span>
+          <span class="qte-badge masque"></span>`;
+        t.addEventListener("click", () => ajouter(a.id, 1));
+        grille.appendChild(t);
+      });
+      sec.appendChild(grille);
+      rayons.appendChild(sec);
+    });
+    choisirOnglet(ongletActif || "cat-0");
+  }
+
+  function choisirOnglet(id) {
+    ongletActif = id;
+    document.querySelectorAll(".onglet").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.cible === id)));
+    document.querySelectorAll("#rayons > section").forEach((s) => s.classList.toggle("masque", s.id !== id));
+  }
+
+  function afficherOptions() {
+    const zone = $("tarifs"); zone.innerHTML = "";
+    menu.tarifs.slice(0, 3).forEach((t) => {
+      const b = document.createElement("button");
+      b.type = "button"; b.dataset.id = t.id;
+      b.textContent = t.court || texteTarif(t);
+      b.title = texteTarif(t);
+      b.addEventListener("click", () => { tarif = t.id; afficherTicket(); });
+      zone.appendChild(b);
+    });
+    const sel = $("type-client"); sel.innerHTML = "";
+    for (const [cle, nom] of Object.entries(TYPES_CLIENT)) sel.add(new Option(nom, cle));
+  }
+
+  // --- Panier ----------------------------------------------------------------------------
+  function ajouter(id, q) {
+    panier.set(id, Math.min(999, (panier.get(id) || 0) + q));
+    afficherTicket();
+  }
+  function fixer(id, q) {
+    if (!Number.isFinite(q) || q <= 0) panier.delete(id);
+    else panier.set(id, Math.min(999, Math.floor(q)));
+    afficherTicket();
+  }
+
+  function afficherTicket() {
+    const c = calculer();
+    const zone = $("lignes");
+    if (!c.lignes.length) {
+      zone.innerHTML = `<div class="vide">Touche un article de la carte pour l'ajouter.<br>Tu peux ensuite taper la quantité exacte.</div>`;
+    } else {
+      zone.innerHTML = "";
+      c.lignes.forEach(({ a, q, montant }) => {
+        const l = document.createElement("div");
+        l.className = "ligne";
+        l.innerHTML = `<div class="nom">${echapper(a.emoji || "")} ${echapper(a.nom)}</div>
+          <div class="montant">${fmt(montant)}</div>
+          <div class="stepper">
+            <button type="button" data-action="moins" aria-label="Retirer un">−</button>
+            <input type="number" inputmode="numeric" min="0" max="999" value="${q}" aria-label="Quantité ${echapper(a.nom)}">
+            <button type="button" data-action="plus" aria-label="Ajouter un">+</button>
+            <button type="button" class="lien retirer" data-action="suppr" aria-label="Retirer ${echapper(a.nom)}">✕</button>
+          </div>
+          <div class="pu">${fmt(a.prixC)} l'unité</div>`;
+        l.querySelector('[data-action="moins"]').addEventListener("click", () => fixer(a.id, q - 1));
+        l.querySelector('[data-action="plus"]').addEventListener("click", () => fixer(a.id, q + 1));
+        l.querySelector('[data-action="suppr"]').addEventListener("click", () => fixer(a.id, 0));
+        const champ = l.querySelector("input");
+        champ.addEventListener("change", () => fixer(a.id, parseInt(champ.value, 10)));
+        champ.addEventListener("keydown", (e) => { if (e.key === "Enter") champ.blur(); });
+        champ.addEventListener("focus", () => champ.select());
+        zone.appendChild(l);
+      });
+    }
+    // badges de quantité sur la carte
+    document.querySelectorAll(".tuile").forEach((t) => {
+      const q = panier.get(t.dataset.id) || 0, b = t.querySelector(".qte-badge");
+      b.textContent = "×" + q; b.classList.toggle("masque", !q);
+    });
+    document.querySelectorAll("#tarifs button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.id === tarif)));
+    $("sous-total").textContent = fmt(c.sousTotal);
+    $("rang-ajust").classList.toggle("masque", !c.ajustement);
+    $("libelle-ajust").textContent = texteTarif(c.tarif);
+    $("ajustement").textContent = (c.ajustement > 0 ? "+" : "") + fmt(c.ajustement);
+    $("total").textContent = fmt(c.total);
+    $("btn-encaisser").disabled = !c.lignes.length;
+    $("btn-encaisser").textContent = c.lignes.length ? `Encaisser ${fmt(c.total)}` : "Encaisser";
+    const nb = c.lignes.reduce((s, l) => s + l.q, 0);
+    $("barre-nb").textContent = nb ? `Voir la commande · ${nb} article${nb > 1 ? "s" : ""}` : "Panier vide";
+    $("barre-total").textContent = fmt(c.total);
+    sauverBrouillon();
+  }
+
+  // --- Envoi vers Discord (webhook) -------------------------------------------------------
+  function nouvelUid() {
+    try { return crypto.randomUUID(); } catch { return Date.now().toString(36) + Math.random().toString(36).slice(2); }
+  }
+
+  function construireCommande() {
+    const c = calculer();
+    return {
+      type: "commande_dispatch", v: 1, uid: nouvelUid(), cree_le: new Date().toISOString(),
+      vendeur: memoire.lire(CLE_VENDEUR, "") || "Site",
+      lignes: c.lignes.map(({ a, q }) => ({ id: a.id, nom: a.nom, qte: q })),
+      tarif: c.tarif.id, type_client: $("type-client").value, client: $("nom-client").value.trim(),
+      total: c.total,
+      _affichage: {
+        lignes: c.lignes.map(({ a, q, montant }) => `${q}× ${a.nom} — ${fmt(montant)}`),
+        ajustement: c.ajustement ? `${texteTarif(c.tarif)} : ${(c.ajustement > 0 ? "+" : "") + fmt(c.ajustement)}` : "",
+      },
+    };
+  }
+
+  async function envoyer(cmd) {
+    const aff = cmd._affichage || { lignes: [], ajustement: "" };
+    const donnees = { ...cmd }; delete donnees._affichage;
+    const champs = [{ name: "Client", value: `${cmd.client || "De passage"} (${TYPES_CLIENT[cmd.type_client] || cmd.type_client})`, inline: true },
+                    { name: "Vendeur", value: cmd.vendeur || "—", inline: true }];
+    if (aff.ajustement) champs.unshift({ name: "Tarif", value: aff.ajustement, inline: true });
+    const message = {
+      username: `Caisse — ${(config && config.e) || "Le Dispatch"}`.slice(0, 80),
+      embeds: [{
+        title: `🧾 Commande — ${fmt(cmd.total)}`, color: 0xE8212B,
+        description: aff.lignes.join("\n").slice(0, 4000) || "—",
+        fields: champs,
+        footer: { text: "En attente du bot : elle sera enregistrée en compta dès qu'il sera en ligne." },
+        timestamp: cmd.cree_le,
+      }],
+      allowed_mentions: { parse: [] },
+    };
+    const corps = () => {
+      const fd = new FormData();
+      fd.append("payload_json", JSON.stringify(message));
+      fd.append("files[0]", new Blob([JSON.stringify(donnees)], { type: "application/json" }), "commande.json");
+      return fd;
+    };
+    try {
+      const r = await fetch(config.w + "?wait=true", { method: "POST", body: corps() });
+      if (r.ok) return true;
+      if (r.status === 404 || r.status === 401) throw Object.assign(new Error("webhook supprimé"), { fatal: true });
+      return false;  // 429 (trop d'envois) ou 5xx : on réessaiera
+    } catch (err) {
+      if (err.fatal) throw err;
+      // Le navigateur peut refuser de lire la réponse de Discord (CORS) alors que l'envoi a réussi :
+      // on renvoie en mode « opaque ». Un éventuel doublon est écarté par le bot (même uid).
+      try { await fetch(config.w, { method: "POST", mode: "no-cors", body: corps() }); return true; }
+      catch { return false; }  // vraiment hors ligne
+    }
+  }
+
+  let envoiEnCours = false;
+  async function viderFile() {
+    if (envoiEnCours || !config) return;
+    envoiEnCours = true;
+    try {
+      let file = memoire.lire(CLE_FILE, []);
+      while (file.length) {
+        let ok = false;
+        try { ok = await envoyer(file[0]); }
+        catch (err) { afficherEtat(`⚠️ ${err.message} — le gérant doit refaire /caisse site`); envoiEnCours = false; return; }
+        if (!ok) break;
+        file.shift(); memoire.ecrire(CLE_FILE, file);
+        await new Promise((r) => setTimeout(r, 600));  // Discord : quelques envois par seconde max
+      }
+    } finally { envoiEnCours = false; afficherEtat(); }
+  }
+
+  function afficherEtat(texte) {
+    const n = memoire.lire(CLE_FILE, []).length;
+    $("puce-etat").classList.toggle("attente", n > 0 || !!texte);
+    $("texte-etat").textContent = texte || (n ? `${n} commande${n > 1 ? "s" : ""} en attente d'envoi` : "Prêt");
+  }
+
+  // --- Encaissement -------------------------------------------------------------------------
+  function ouvrirConfirmation() {
+    const c = calculer();
+    if (!c.lignes.length) return;
+    const recap = c.lignes.map(({ a, q, montant }) => `<div><span>${q}× ${echapper(a.nom)}</span><span>${fmt(montant)}</span></div>`).join("");
+    const ajust = c.ajustement ? `<div><span>${echapper(texteTarif(c.tarif))}</span><span>${(c.ajustement > 0 ? "+" : "") + fmt(c.ajustement)}</span></div>` : "";
+    const client = $("nom-client").value.trim() || "De passage";
+    $("recap").innerHTML = recap + ajust +
+      `<div class="tot"><span>TOTAL</span><span>${fmt(c.total)}</span></div>` +
+      `<div style="color:var(--discret);margin-top:6px"><span>Client</span><span>${echapper(client)} · ${echapper(TYPES_CLIENT[$("type-client").value])}</span></div>`;
+    $("btn-valider").textContent = `Encaisser ${fmt(c.total)}`;
+    montrer("fenetre-confirmer");
+    $("btn-valider").focus();
+  }
+
+  async function valider() {
+    const btn = $("btn-valider");
+    btn.disabled = true;
+    const cmd = construireCommande();
+    const file = memoire.lire(CLE_FILE, []);
+    file.push(cmd); memoire.ecrire(CLE_FILE, file);    // gardée tant qu'elle n'est pas partie
+    await viderFile();
+    const partie = !memoire.lire(CLE_FILE, []).some((x) => x.uid === cmd.uid);
+    cacher("fenetre-confirmer");
+    $("coche").classList.toggle("attente", !partie);
+    $("coche").textContent = partie ? "✓" : "⏳";
+    $("resultat-titre").textContent = partie ? `Commande envoyée — ${fmt(cmd.total)}` : "Commande gardée";
+    $("resultat-texte").textContent = partie
+      ? "Elle arrive sur Discord et sera enregistrée en compta par le bot (tout de suite s'il est en ligne, sinon à son démarrage)."
+      : "Pas de connexion pour l'instant : la commande est gardée sur cet appareil et partira automatiquement dès que possible. Ne ferme pas cette page.";
+    panier = new Map(); tarif = menu.tarifs[0].id; $("nom-client").value = ""; $("type-client").value = "particulier";
+    afficherTicket();
+    $("ticket").classList.remove("ouvert");
+    montrer("fenetre-resultat");
+    $("btn-nouvelle").focus();
+    btn.disabled = false;
+  }
+
+  // --- Fenêtres, vendeur ------------------------------------------------------------------
+  function montrer(id) { $(id).classList.remove("masque"); }
+  function cacher(id) { $(id).classList.add("masque"); }
+
+  function demanderVendeur() {
+    $("champ-vendeur").value = memoire.lire(CLE_VENDEUR, "");
+    montrer("fenetre-vendeur");
+    setTimeout(() => $("champ-vendeur").focus(), 30);
+  }
+  function validerVendeur() {
+    const nom = $("champ-vendeur").value.trim();
+    if (!nom) { $("champ-vendeur").focus(); return; }
+    memoire.ecrire(CLE_VENDEUR, nom);
+    $("nom-vendeur").textContent = nom;
+    cacher("fenetre-vendeur");
+  }
+
+  // --- Démarrage ------------------------------------------------------------------------------
+  async function demarrer() {
+    try {   // toujours relu : si le webhook change, le site suit dès que config.json est renvoyé
+      const r = await fetch("config.json", { cache: "no-store" });
+      if (r.ok) { const cfg = await r.json(); if (configValide(cfg)) { config = cfg; memoire.ecrire(CLE_CONFIG, cfg); } }
+    } catch { /* hors ligne : on garde la dernière config connue */ }
+    if (!config) { const connue = memoire.lire(CLE_CONFIG, null); if (configValide(connue)) config = connue; }
+    if (!config) {
+      montrer("ecran-activation");
+      $("puce-etat").classList.add("masque"); $("puce-vendeur").classList.add("masque");
+      return;
+    }
+    try {
+      const r = await fetch("menu.json", { cache: "no-store" });
+      menu = await r.json();
+    } catch (err) {
+      document.body.insertAdjacentHTML("beforeend", `<div class="voile"><div class="fenetre"><h3>Carte introuvable</h3><p>Le fichier menu.json n'a pas pu être chargé. Vérifie qu'il est bien envoyé sur GitHub à côté de index.html.</p></div></div>`);
+      return;
+    }
+    menu.tarifs = (menu.tarifs && menu.tarifs.length) ? menu.tarifs : [{ id: "normal", nom: "Tarif normal", pourcentage: 0 }];
+    menu.categories.forEach((cat) => cat.articles.forEach((a) => {
+      a.prixC = Math.round(a.prix * 100); a.categorie = cat.nom; articles[a.id] = a; ordreArticles.push(a.id);
+    }));
+    tarif = menu.tarifs[0].id;
+    afficherOptions();
+    afficherCarte();
+    const brouillon = memoire.lire(CLE_BROUILLON, null);
+    if (brouillon) {
+      panier = new Map((brouillon.panier || []).filter(([id]) => articles[id]));
+      if (menu.tarifs.some((t) => t.id === brouillon.tarif)) tarif = brouillon.tarif;
+      if (TYPES_CLIENT[brouillon.type]) $("type-client").value = brouillon.type;
+      $("nom-client").value = brouillon.client || "";
+    }
+    afficherTicket();
+    montrer("ecran-caisse");
+
+    const vendeur = memoire.lire(CLE_VENDEUR, "");
+    $("nom-vendeur").textContent = vendeur || "—";
+    if (!vendeur) demanderVendeur();
+
+    $("btn-encaisser").addEventListener("click", ouvrirConfirmation);
+    $("btn-valider").addEventListener("click", valider);
+    $("btn-annuler").addEventListener("click", () => cacher("fenetre-confirmer"));
+    $("btn-nouvelle").addEventListener("click", () => cacher("fenetre-resultat"));
+    $("btn-vider").addEventListener("click", () => { panier = new Map(); afficherTicket(); });
+    $("type-client").addEventListener("change", sauverBrouillon);
+    $("nom-client").addEventListener("input", sauverBrouillon);
+    $("puce-vendeur").addEventListener("click", demanderVendeur);
+    $("btn-vendeur").addEventListener("click", validerVendeur);
+    $("champ-vendeur").addEventListener("keydown", (e) => { if (e.key === "Enter") validerVendeur(); });
+    $("puce-etat").addEventListener("click", viderFile);
+    $("barre-mobile").addEventListener("click", () => $("ticket").classList.add("ouvert"));
+    $("btn-fermer-ticket").addEventListener("click", () => $("ticket").classList.remove("ouvert"));
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") { cacher("fenetre-confirmer"); cacher("fenetre-resultat"); $("ticket").classList.remove("ouvert"); }
+    });
+    window.addEventListener("online", viderFile);
+    setInterval(viderFile, 15000);
+    afficherEtat();
+    viderFile();
+  }
+  demarrer();
+})();
+</script>
+</body>
+</html>
