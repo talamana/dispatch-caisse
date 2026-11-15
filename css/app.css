@@ -285,6 +285,12 @@ table.liste.compacte th { padding: 6px 8px; }
 .recette .stepper { justify-content: flex-end; }
 .recette .stepper span { min-width: 28px; text-align: center; font-weight: 700; }
 .liste-ingredients { padding-left: 18px; margin: 6px 0 0; line-height: 1.9; }
+.preparations { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.preparations li { background: var(--panneau-2); border-radius: 10px; padding: 8px 10px; font-size: 14px; }
+.lieu-achat { margin-bottom: 10px; }
+.lieu-tete { display: flex; align-items: center; gap: 8px; padding: 6px 8px; background: var(--panneau-2); border-radius: 10px; font-size: 14px; }
+.lieu-tete .espace { flex: 1; }
+.total-courses { display: flex; align-items: baseline; gap: 10px; justify-content: flex-end; font-size: 17px; margin-top: 8px; }
 @media (max-width: 880px) {
   .cuisine { grid-template-columns: 1fr; }
   .besoins { position: static; max-height: none; }

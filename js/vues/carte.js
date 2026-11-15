@@ -1,6 +1,7 @@
 // Carte du restaurant (articles, tarifs) et réglages de l'entreprise (Art. III).
 import { definirCode, q, table } from "../api.js";
-import { $, $$, brancherActions, confirmer, echapper, fmt, formulaire, formulaireEnFenetre, lireFormulaire, tableau, toast } from "../outils.js";
+import { LIEUX, lieuDAchat, lireComposition } from "../cuisine_calc.js";
+import { $, $$, brancherActions, confirmer, echapper, fenetre, fmt, formulaire, formulaireEnFenetre, lireFormulaire, tableau, toast } from "../outils.js";
 
 export async function afficher(vue, params) {
   const onglet = ["tarifs", "ingredients", "reglages"].includes(params[0]) ? params[0] : "articles";
@@ -112,31 +113,79 @@ async function tarifs(zone) {
   await charger();
 }
 
+// composition d'un ingrédient combiné <-> texte « 2× Farine » (une ligne par composant)
+const compoIngrEnTexte = (compo) => (compo || []).map((c) => `${(c.qte || 1) > 1 ? `${c.qte}× ` : ""}${c.nom}`).join("\n");
+
 async function ingredients(zone) {
   let lignes = [];
   const champs = [
     { nom: "prix_superette", libelle: "Prix à la supérette ($ l'unité)", type: "argent" },
+    { nom: "prix_maraicher", libelle: "Prix au maraîcher ($ l'unité)", type: "argent" },
     { nom: "prix_fournisseur", libelle: "Prix chez Raven / Sunny ($ l'unité)", type: "argent" },
-    { nom: "fournisseur", libelle: "Fournisseur le moins cher", type: "choix", options: [["", "—"], ["Raven", "Raven"], ["Sunny", "Sunny"], ["Supérette", "Supérette"]] },
-    { nom: "note", libelle: "Note", plein: true },
+    { nom: "fournisseur", libelle: "Où l'acheter", type: "choix", options: [["", "Le moins cher (automatique)"], ...LIEUX.map((l) => [l, l])] },
+    { nom: "compose", libelle: "Ingrédient combiné : composé de (un par ligne, ex. « 2× Farine »)", type: "zone", plein: true,
+      aide: "Vide = ingrédient acheté tel quel. Rempli = on le fabrique : la liste de courses contient ses composants." },
+    { nom: "produit", libelle: "Unités obtenues par fabrication", type: "nombre", min: 1 },
+    { nom: "note", libelle: "Remarque", type: "zone", plein: true },
   ];
+  const cle = (t) => sansAccent(t);
+  const lieuAffiche = (i) => {
+    const l = lieuDAchat(i);
+    return l ? `${echapper(l)}${i.fournisseur ? "" : ' <span class="discret">(moins cher)</span>'}` : '<span class="discret">à définir</span>';
+  };
+  const prix = (v) => (v != null ? fmt(v) : "—");
+  // Enregistre une composition ; crée les composants qui ne sont pas encore dans la liste
+  const enregistrerCompo = async (nom, compo, extra = {}) => {
+    const connus = new Set(lignes.map((l) => cle(l.nom)));
+    const nouveaux = [...new Set(compo.map((c) => c.nom).filter((n) => !connus.has(cle(n)) && cle(n) !== cle(nom)))];
+    for (const n of nouveaux) await q(table("ingredients").insert({ nom: n }));
+    // noms écrits comme dans la liste (accents / majuscules)
+    const parCle = new Map(lignes.map((l) => [cle(l.nom), l.nom]));
+    const propre = compo.filter((c) => cle(c.nom) !== cle(nom)).map((c) => ({ nom: parCle.get(cle(c.nom)) || c.nom, qte: c.qte }));
+    await q(table("ingredients").update({ ...extra, composition: propre }).eq("nom", nom));
+    return nouveaux;
+  };
   const charger = async () => {
     lignes = await q(table("ingredients").select("*").order("nom"));
-    const sansPrix = lignes.filter((i) => i.prix_superette == null && i.prix_fournisseur == null).length;
+    const sansPrix = lignes.filter((i) => i.prix_superette == null && i.prix_maraicher == null && i.prix_fournisseur == null && !(i.composition || []).length).length;
+    const aConvertir = lignes.filter((i) => i.note && !(i.composition || []).length && lireComposition(i.note).length).length;
     zone.innerHTML = `<div class="bloc"><div class="bloc-tete"><h2 class="titre-bloc">🧺 ${lignes.length} ingrédients</h2>
-      <span class="discret">${sansPrix ? `${sansPrix} sans prix. ` : ""}Les prix servent au coût des listes de courses (onglet Cuisine).</span></div>
+      <span class="discret">${sansPrix ? `${sansPrix} sans prix. ` : ""}Prix et lieux servent à la liste de courses (onglet Cuisine).</span><span class="espace"></span>
+      ${aConvertir ? `<button class="btn" id="depuis-remarques">🔁 Combinés depuis les remarques (${aConvertir})</button>` : ""}</div>
       ${tableau(lignes, [
-        { titre: "Ingrédient", rendu: (i) => `<strong>${echapper(i.nom)}</strong>${i.note ? `<div class="discret">${echapper(i.note)}</div>` : ""}` },
-        { titre: "Supérette", classe: "droite", rendu: (i) => i.prix_superette != null ? fmt(i.prix_superette) : "—" },
-        { titre: "Raven / Sunny", classe: "droite", rendu: (i) => i.prix_fournisseur != null ? fmt(i.prix_fournisseur) : "—" },
-        { titre: "Économie", classe: "droite", rendu: (i) => i.prix_superette != null && i.prix_fournisseur != null ? `<span class="${i.prix_fournisseur < i.prix_superette ? "vert" : ""}">${fmt(i.prix_superette - i.prix_fournisseur)}</span>` : "" },
-        { titre: "Chez", rendu: (i) => echapper(i.fournisseur || "") },
+        { titre: "Ingrédient", rendu: (i) => `<strong>${echapper(i.nom)}</strong>${(i.composition || []).length ? ` <span class="badge">combiné</span><div class="discret">= ${echapper(compoIngrEnTexte(i.composition).split("\n").join(" + "))}${i.produit > 1 ? ` → ${i.produit} unités` : ""}</div>` : ""}${i.note ? `<div class="discret">📝 ${echapper(i.note)}</div>` : ""}` },
+        { titre: "Supérette", classe: "droite", rendu: (i) => prix(i.prix_superette) },
+        { titre: "Maraîcher", classe: "droite", rendu: (i) => prix(i.prix_maraicher) },
+        { titre: "Raven / Sunny", classe: "droite", rendu: (i) => prix(i.prix_fournisseur) },
+        { titre: "Où acheter", rendu: (i) => ((i.composition || []).length ? '<span class="discret">fabriqué</span>' : lieuAffiche(i)) },
       ], { actions: () => `<button class="btn petit icone" data-action="modifier" title="Modifier">✏️</button>` })}</div>`;
+    const b = $("#depuis-remarques", zone);
+    if (b) b.onclick = convertirRemarques;
+  };
+  const convertirRemarques = async () => {
+    const candidats = lignes.filter((i) => i.note && !(i.composition || []).length)
+      .map((i) => ({ i, compo: lireComposition(i.note) })).filter((x) => x.compo.length);
+    const connus = new Set(lignes.map((l) => cle(l.nom)));
+    const contenu = `<p class="discret">Coche les ingrédients qui sont vraiment combinés. Les composants en <em>italique</em> ne sont pas encore dans la liste : ils seront ajoutés.</p>
+      <table class="liste compacte"><tbody>${candidats.map((x, n) => `<tr><td><label class="case"><input type="checkbox" data-n="${n}" ${x.compo.some((c) => connus.has(cle(c.nom))) ? "checked" : ""}> <strong>${echapper(x.i.nom)}</strong></label>
+        <div class="discret">📝 ${echapper(x.i.note)}</div></td>
+        <td>= ${x.compo.map((c) => `${c.qte > 1 ? `${c.qte}× ` : ""}${connus.has(cle(c.nom)) ? echapper(c.nom) : `<em>${echapper(c.nom)}</em>`}`).join(" + ")}</td></tr>`).join("")}</tbody></table>`;
+    await fenetre({ titre: "Ingrédients combinés", large: true, contenu, boutons: [{ texte: "Annuler" }, { texte: "Enregistrer la sélection", classe: "principal", action: async (f) => {
+      const choisis = [...f.querySelectorAll("[data-n]:checked")].map((c) => candidats[Number(c.dataset.n)]);
+      let ajoutes = 0;
+      for (const x of choisis) ajoutes += (await enregistrerCompo(x.i.nom, x.compo)).length;
+      toast(`${choisis.length} ingrédient(s) combiné(s) enregistré(s)${ajoutes ? `, ${ajoutes} composant(s) ajouté(s) à la liste` : ""}.`);
+      charger();
+    } }] });
   };
   brancherActions(zone, () => lignes, {
-    modifier: (i) => formulaireEnFenetre(i.nom, champs, i, async (o) => {
+    modifier: (i) => formulaireEnFenetre(i.nom, champs, { ...i, compose: compoIngrEnTexte(i.composition) }, async (o) => {
+      const compo = lireComposition(o.compose);
+      delete o.compose;
       o.fournisseur = o.fournisseur || null;
-      await q(table("ingredients").update(o).eq("nom", i.nom)); toast("Prix enregistré."); charger();
+      o.produit = Math.max(1, Math.round(o.produit || 1));
+      const ajoutes = await enregistrerCompo(i.nom, compo, o);
+      toast(`Ingrédient enregistré${ajoutes.length ? ` (ajouté à la liste : ${ajoutes.join(", ")})` : ""}.`); charger();
     }),
   });
   await charger();

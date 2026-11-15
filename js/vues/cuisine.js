@@ -28,27 +28,47 @@ export async function afficher(vue, params) {
   return onglet === "recettes" ? recettes(zone, donnees, idx) : commandes(zone, vue, donnees, idx);
 }
 
-// --- Tableaux « cuissons » et « ingrédients » (communs aux deux onglets) ------------------------
+// --- Tableaux « cuissons », « à préparer » et « à acheter » (communs aux deux onglets) -------------
+const ICONES = { "Maraîcher": "🥕", "Raven": "📞", "Sunny": "📞", "Raven / Sunny": "📞", "Supérette": "🛒" };
+const nomLieu = (l) => (l ? `${ICONES[l] || "📍"} ${l}` : "❓ Lieu à définir");
+
 function htmlBesoins(b, titreVide) {
   if (!b.cuissons.length) return `<div class="vide">${echapper(titreVide)}</div>`;
-  const prixConnus = b.ingredients.some((i) => i.prix_superette != null || i.prix_fournisseur != null);
-  const coutTotal = (v, manquants) => v || !manquants ? `${fmt(v)}${manquants ? `<div class="discret">+ ${manquants} sans prix</div>` : ""}` : "—";
+  const prixConnus = b.ingredients.some((i) => i.prix != null);
+  const sousTotal = (g) => g.total || !g.sansPrix ? fmt(g.total) + (g.sansPrix ? ` <span class="discret">+ ${g.sansPrix} sans prix</span>` : "") : "";
+  const economie = b.cout.toutSuperette - b.cout.total;
   return `<h3 class="sous-titre">Cuissons à lancer</h3>
     <table class="liste compacte"><thead><tr><th>Recette</th><th class="droite">Portions</th><th class="droite">Cuissons</th></tr></thead><tbody>
     ${b.cuissons.map((c) => `<tr><td>${echapper(c.nom)}${c.produit > 1 ? `<div class="discret">${c.produit} portions par cuisson${c.en_trop ? ` · ${c.en_trop} en trop` : ""}</div>` : ""}</td>
       <td class="droite">${c.portions}</td><td class="droite"><strong>${c.cuissons}</strong></td></tr>`).join("")}</tbody></table>
-    <h3 class="sous-titre">Ingrédients</h3>
-    <table class="liste compacte"><thead><tr><th>Ingrédient</th><th class="droite">Qté</th>${prixConnus ? '<th class="droite">Supérette</th><th class="droite">Raven / Sunny</th>' : ""}</tr></thead><tbody>
-    ${b.ingredients.map((i) => `<tr><td>${echapper(i.nom)}</td><td class="droite"><strong>${i.qte}</strong></td>${prixConnus
-      ? `<td class="droite">${i.prix_superette != null ? fmt(i.prix_superette * i.qte) : "—"}</td><td class="droite">${i.prix_fournisseur != null ? fmt(i.prix_fournisseur * i.qte) : "—"}</td>` : ""}</tr>`).join("")}</tbody>
-    ${prixConnus ? `<tfoot><tr><td colspan="2">Total</td><td class="droite">${coutTotal(b.cout.superette, b.cout.sansPrixS)}</td><td class="droite">${coutTotal(b.cout.fournisseur, b.cout.sansPrixF)}</td></tr></tfoot>` : ""}</table>
-    ${prixConnus ? "" : '<p class="discret">Les prix des ingrédients (supérette, Raven, Sunny) se règlent dans l\'espace gérant › Carte & réglages › Ingrédients.</p>'}
+    ${b.preparations.length ? `<h3 class="sous-titre">À préparer avant (ingrédients combinés)</h3>
+    <ul class="preparations">${b.preparations.map((p) => `<li><strong>${p.fois}× ${echapper(p.nom)}</strong>
+      ${p.produit > 1 ? `<span class="discret">(${p.produit} par fabrication, ${p.qte} nécessaires${p.en_trop ? `, ${p.en_trop} en trop` : ""})</span>` : ""}
+      <div class="discret">avec ${p.composants.map((c) => `${c.qte} ${echapper(c.nom)}`).join(", ")}</div></li>`).join("")}</ul>` : ""}
+    <h3 class="sous-titre">À acheter</h3>
+    ${b.achats.map((g) => `<div class="lieu-achat"><div class="lieu-tete"><strong>${nomLieu(g.lieu)}</strong><span class="espace"></span>${sousTotal(g)}</div>
+      <table class="liste compacte"><tbody>${g.articles.map((a) => `<tr><td>${echapper(a.nom)}</td><td class="droite"><strong>${a.qte}</strong></td>
+        ${prixConnus ? `<td class="droite discret">${a.prix != null ? `${fmt(a.prix)} /u` : "—"}</td><td class="droite">${a.cout != null ? fmt(a.cout) : "—"}</td>` : ""}</tr>`).join("")}</tbody></table></div>`).join("")}
+    ${prixConnus ? `<div class="total-courses"><span>Total</span><strong>${fmt(b.cout.total)}</strong>${b.cout.sansPrix ? `<span class="discret">+ ${b.cout.sansPrix} sans prix</span>` : ""}</div>
+      ${economie > 0 && !b.cout.sansPrixSuperette ? `<p class="discret">Tout à la supérette : ${fmt(b.cout.toutSuperette)} — économie ${fmt(economie)}.</p>` : ""}`
+    : '<p class="discret">Les prix et le lieu d\'achat (supérette, maraîcher, Raven, Sunny) se règlent dans l\'espace gérant › Carte & réglages › Ingrédients.</p>'}
     <div class="actions-ligne"><button class="btn" data-copier>📋 Copier la liste de courses</button></div>`;
 }
 
 function texteCourses(b, titre) {
-  return `${titre}\n` + b.ingredients.map((i) => `- ${i.qte} × ${i.nom}`).join("\n")
-    + "\n\nCuissons :\n" + b.cuissons.map((c) => `- ${c.cuissons} × ${c.nom}${c.produit > 1 ? ` (${c.portions} portions)` : ""}`).join("\n");
+  const lignes = [titre];
+  for (const g of b.achats) {
+    lignes.push("", `${g.lieu || "Lieu à définir"}${g.total ? ` (${fmt(g.total)})` : ""} :`);
+    for (const a of g.articles) lignes.push(`- ${a.qte} × ${a.nom}`);
+  }
+  if (b.preparations.length) {
+    lignes.push("", "À préparer avant :");
+    for (const p of b.preparations) lignes.push(`- ${p.fois} × ${p.nom} (avec ${p.composants.map((c) => `${c.qte} ${c.nom}`).join(", ")})`);
+  }
+  lignes.push("", "Cuissons :");
+  for (const c of b.cuissons) lignes.push(`- ${c.cuissons} × ${c.nom}${c.produit > 1 ? ` (${c.portions} portions)` : ""}`);
+  if (b.cout.total) lignes.push("", `Total : ${fmt(b.cout.total)}${b.cout.sansPrix ? ` + ${b.cout.sansPrix} sans prix` : ""}`);
+  return lignes.join("\n").replace(/\u202f|\u00a0/g, " ");
 }
 
 function brancherCopie(conteneur, texte) {

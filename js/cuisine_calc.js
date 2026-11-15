@@ -23,10 +23,26 @@ export function indexer({ articles = [], recettes = [], ingredients = [] }) {
     return n;
   };
   recettes.forEach((r) => calcNiveau(r.id));
+  // ingrédients combinés : niveau 0 = utilisé directement, 1 = sert à fabriquer un autre ingrédient…
+  const prix = new Map(ingredients.map((i) => [norm(i.nom), i]));
+  const parentsI = new Map();
+  for (const i of ingredients) for (const c of i.composition || []) {
+    parentsI.set(norm(c.nom), [...(parentsI.get(norm(c.nom)) || []), norm(i.nom)]);
+  }
+  const niveauI = new Map();
+  const calcNiveauI = (cle, pile = new Set()) => {
+    if (niveauI.has(cle)) return niveauI.get(cle);
+    if (pile.has(cle)) return 0;
+    pile.add(cle);
+    const n = Math.max(0, ...(parentsI.get(cle) || []).map((p) => calcNiveauI(p, pile) + 1));
+    pile.delete(cle); niveauI.set(cle, n);
+    return n;
+  };
   return {
+    niveauI: { get: (cle) => calcNiveauI(cle) },
     articles: new Map(articles.map((a) => [a.id, a])),
     recettes: parId, recettesParNom: parNom, niveau,
-    prix: new Map(ingredients.map((i) => [norm(i.nom), i])),
+    prix,
   };
 }
 
@@ -88,31 +104,95 @@ export function besoins(portions, idx) {
   return recompter(cuissons, idx);
 }
 
+// --- Où acheter ---------------------------------------------------------------------------------
+export const LIEUX = ["Maraîcher", "Raven", "Sunny", "Supérette"];
+const ORDRE_LIEUX = ["Maraîcher", "Raven", "Sunny", "Raven / Sunny", "Supérette", null];
+
+export function prixChez(p, lieu) {
+  if (!p) return null;
+  if (lieu === "Supérette") return p.prix_superette ?? null;
+  if (lieu === "Maraîcher") return p.prix_maraicher ?? null;
+  if (lieu === "Raven" || lieu === "Sunny" || lieu === "Raven / Sunny") return p.prix_fournisseur ?? null;
+  return null;
+}
+
+// Lieu choisi par le gérant, sinon le moins cher parmi les prix connus, sinon null (à définir)
+export function lieuDAchat(p) {
+  if (!p) return null;
+  if (LIEUX.includes(p.fournisseur)) return p.fournisseur;
+  const offres = [["Maraîcher", p.prix_maraicher], ["Raven / Sunny", p.prix_fournisseur], ["Supérette", p.prix_superette]]
+    .filter(([, v]) => v != null);
+  if (!offres.length) return null;
+  return offres.reduce((a, b) => (b[1] < a[1] ? b : a))[0];
+}
+
 function recompter(cuissons, idx) {
-  const ingredients = new Map();
+  // 1. ingrédients des cuissons (les sous-recettes sont des cuissons à part)
+  const demande = new Map();
+  const ajouter = (nom, qte) => {
+    const cle = norm(nom);
+    const e = demande.get(cle) || { nom, qte: 0 };
+    e.qte += qte; demande.set(cle, e);
+  };
   for (const c of cuissons) {
     const r = idx.recettes.get(c.recette);
     for (const i of r.ingredients || []) {
       const sous = idx.recettesParNom.get(norm(i.nom));
       if (sous && sous.id !== c.recette) continue;                 // fourni par une autre cuisson
-      const cle = norm(i.nom);
-      const e = ingredients.get(cle) || { nom: i.nom, qte: 0 };
-      e.qte += (Number(i.qte) || 1) * c.cuissons;
-      ingredients.set(cle, e);
+      ajouter(i.nom, (Number(i.qte) || 1) * c.cuissons);
     }
   }
-  const liste = [...ingredients.values()].sort((a, b) => a.nom.localeCompare(b.nom, "fr"));
-  let superette = 0, fournisseur = 0, sansPrixS = 0, sansPrixF = 0;
-  for (const e of liste) {
-    const p = idx.prix.get(norm(e.nom)) || {};
-    e.prix_superette = p.prix_superette ?? null;
-    e.prix_fournisseur = p.prix_fournisseur ?? null;
-    e.fournisseur = p.fournisseur || null;
-    if (e.prix_superette == null) sansPrixS++; else superette += e.prix_superette * e.qte;
-    if (e.prix_fournisseur == null) sansPrixF++; else fournisseur += e.prix_fournisseur * e.qte;
+  // 2. ingrédients combinés : on les fabrique, donc on achète leurs composants
+  const preparations = [];
+  const traites = new Set();
+  for (;;) {
+    const cle = [...demande.keys()].filter((k) => !traites.has(k) && (idx.prix.get(k)?.composition || []).length)
+      .sort((a, b) => idx.niveauI.get(a) - idx.niveauI.get(b))[0];
+    if (cle === undefined) break;
+    traites.add(cle);
+    const p = idx.prix.get(cle), e = demande.get(cle);
+    const produit = Math.max(1, Number(p.produit) || 1);
+    const fois = Math.ceil(e.qte / produit);
+    preparations.push({ nom: e.nom, qte: e.qte, produit, fois, en_trop: fois * produit - e.qte,
+      composants: p.composition.map((c) => ({ nom: c.nom, qte: (Number(c.qte) || 1) * fois })) });
+    demande.delete(cle);
+    for (const c of p.composition) if (!traites.has(norm(c.nom))) ajouter(c.nom, (Number(c.qte) || 1) * fois);
   }
+  // 3. achats regroupés par lieu, avec le prix du lieu
+  const liste = [...demande.values()].sort((a, b) => a.nom.localeCompare(b.nom, "fr"));
+  const groupes = new Map();
+  let total = 0, sansPrix = 0, toutSuperette = 0, sansPrixSuperette = 0;
+  for (const e of liste) {
+    const p = idx.prix.get(norm(e.nom));
+    e.lieu = lieuDAchat(p);
+    e.prix = prixChez(p, e.lieu);
+    e.cout = e.prix == null ? null : e.prix * e.qte;
+    if (e.cout == null) sansPrix++; else total += e.cout;
+    if (p?.prix_superette == null) sansPrixSuperette++; else toutSuperette += p.prix_superette * e.qte;
+    const g = groupes.get(e.lieu) || { lieu: e.lieu, articles: [], total: 0, sansPrix: 0 };
+    g.articles.push(e);
+    if (e.cout == null) g.sansPrix++; else g.total += e.cout;
+    groupes.set(e.lieu, g);
+  }
+  const achats = [...groupes.values()].sort((a, b) => ORDRE_LIEUX.indexOf(a.lieu) - ORDRE_LIEUX.indexOf(b.lieu));
   cuissons.sort((a, b) => (idx.niveau.get(b.recette) || 0) - (idx.niveau.get(a.recette) || 0) || a.nom.localeCompare(b.nom, "fr"));
-  return { cuissons, ingredients: liste, cout: { superette, fournisseur, sansPrixS, sansPrixF } };
+  preparations.reverse();                                        // à fabriquer d'abord : les plus « profonds »
+  return { cuissons, preparations, achats, ingredients: liste,
+    cout: { total, sansPrix, toutSuperette, sansPrixSuperette } };
+}
+
+// --- Remarques -> composition (« Farine + 2 Sucre », « 2x Lait, Oeuf », « Composé de : … ») ------------
+export function lireComposition(texte) {
+  if (!texte) return [];
+  let t = String(texte);
+  if (t.includes(":")) t = t.slice(t.lastIndexOf(":") + 1);
+  return t.split(/\n|,|;|\+|\/|\bet\b|&/i).map((x) => x.trim().replace(/^[-•*]\s*/, "").replace(/[.!]+$/, "")).filter(Boolean).map((x) => {
+    let m = x.match(/^(\d+)\s*[x×*]?\s+(.+)$/i) || x.match(/^(\d+)\s*[x×*]\s*(.+)$/i);
+    if (m) return { nom: m[2].trim(), qte: Number(m[1]) };
+    m = x.match(/^(.+?)\s*(?:[x×*]\s*(\d+)|\((\d+)\))$/i);
+    if (m) return { nom: m[1].trim(), qte: Number(m[2] || m[3]) };
+    return { nom: x, qte: 1 };
+  }).filter((c) => c.nom.length > 1);
 }
 
 // Total des plats de plusieurs commandes (en option sans les plats déjà cochés)
