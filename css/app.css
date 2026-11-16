@@ -285,6 +285,10 @@ table.liste.compacte th { padding: 6px 8px; }
 .recette .stepper { justify-content: flex-end; }
 .recette .stepper span { min-width: 28px; text-align: center; font-weight: 700; }
 .liste-ingredients { padding-left: 18px; margin: 6px 0 0; line-height: 1.9; }
+.toast-action { margin-left: 10px; pointer-events: auto; background: #111; color: #fff; border-color: #111; }
+.bon footer .espace { flex: 1; }
+.bon footer { align-items: center; }
+.bon.servie { border-top-color: var(--discret); opacity: .75; }
 .preparations { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
 .preparations li { background: var(--panneau-2); border-radius: 10px; padding: 8px 10px; font-size: 14px; }
 .lieu-achat { margin-bottom: 10px; }
