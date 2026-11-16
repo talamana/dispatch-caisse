@@ -67,19 +67,12 @@ export function depuisChamp(valeur, avecHeure) {
 }
 
 // --- Notifications ----------------------------------------------------------------------------------
-// action (facultative) : { texte: "Annuler", faire: () => … } — bouton dans le message, qui reste 7 s
-export function toast(message, erreur = false, action = null) {
+export function toast(message, erreur = false) {
   const el = document.createElement("div");
   el.className = "toast" + (erreur ? " erreur" : "");
   el.textContent = message;
-  if (action) {
-    const b = document.createElement("button");
-    b.className = "btn petit toast-action"; b.type = "button"; b.textContent = action.texte;
-    b.onclick = () => { el.remove(); action.faire(); };
-    el.append(" ", b);
-  }
   $("#toasts").appendChild(el);
-  setTimeout(() => el.remove(), action ? 7000 : erreur ? 6000 : 3000);
+  setTimeout(() => el.remove(), erreur ? 6000 : 3000);
 }
 
 // --- Fenêtres ----------------------------------------------------------------------------------------

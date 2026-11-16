@@ -95,7 +95,6 @@ function commandes(zone, vue, donnees, idx) {
   const exclues = new Set(memoire.lire("cuisine_exclues", []));       // commandes décochées pour le calcul
   let sansFaits = memoire.lire("cuisine_sans_faits", true);
   let filtre = "toutes";
-  let servies = null;                                                 // chargées à la demande
   const connues = new Set(liste.map((c) => c.id));
 
   zone.innerHTML = `<div class="cuisine">
@@ -121,55 +120,31 @@ function commandes(zone, vue, donnees, idx) {
   };
 
   const dessiner = () => {
-    const n = (e) => (e === "servies" ? (servies ? servies.length : "") : liste.filter((c) => e === "toutes" || c.etat === e).length);
-    $("#filtres", zone).innerHTML = [["toutes", "Toutes"], ["a_faire", "À faire"], ["en_cours", "En cours"], ["prete", "Prêtes"], ["servies", "↩ Servies (48 h)"]]
+    const n = (e) => liste.filter((c) => e === "toutes" || c.etat === e).length;
+    $("#filtres", zone).innerHTML = [["toutes", "Toutes"], ["a_faire", "À faire"], ["en_cours", "En cours"], ["prete", "Prêtes"]]
       .map(([k, v]) => `<button class="puce-filtre" data-filtre="${k}" aria-pressed="${filtre === k}">${v} <b>${n(k)}</b></button>`).join("");
-    const voirServies = filtre === "servies";
-    const visibles = voirServies ? (servies || []) : liste.filter((c) => filtre === "toutes" || c.etat === filtre);
+    const visibles = liste.filter((c) => filtre === "toutes" || c.etat === filtre);
     $("#bons", zone).innerHTML = visibles.length ? visibles.map((c) => {
       const plats = eclater(c, idx);
       const faits = new Set(c.faits || []);
-      const [libelle, couleur] = ETATS[c.etat] || (c.etat === "servie" ? ["Servie", ""] : [c.etat, ""]);
-      const off = c.etat === "servie" ? "disabled" : "";
+      const [libelle, couleur] = ETATS[c.etat] || [c.etat, ""];
       return `<article class="bon ${c.etat} ${c.nouvelle ? "nouvelle" : ""}" data-id="${c.id}">
-        <header><label class="case"><input type="checkbox" data-selection ${exclues.has(c.id) || off ? "" : "checked"} ${off} title="Compter dans les ingrédients">
+        <header><label class="case"><input type="checkbox" data-selection ${exclues.has(c.id) ? "" : "checked"} title="Compter dans les ingrédients">
           <strong>N°${c.id}</strong></label><span class="discret">${heure(c.date)} · ${depuis(c.date)}</span>
           <span class="espace"></span><span class="badge ${couleur}">${libelle}</span></header>
         ${c.vendeur || c.client ? `<div class="discret qui">${echapper([c.vendeur && `Caisse : ${c.vendeur}`, c.client && `Client : ${c.client}`].filter(Boolean).join(" · "))}</div>` : ""}
         <ul class="plats">${plats.map((p) => `<li class="${faits.has(p.cle) ? "fait" : ""}">
-          <label><input type="checkbox" data-plat="${echapper(p.cle)}" ${faits.has(p.cle) ? "checked" : ""} ${off}>
+          <label><input type="checkbox" data-plat="${echapper(p.cle)}" ${faits.has(p.cle) ? "checked" : ""}>
           <b>${p.qte}×</b> ${echapper(p.nom)}</label>
           ${p.recette ? `<button class="lien" data-recette="${echapper(p.recette)}" title="Voir la recette">ℹ️</button>` : '<span class="badge">sans recette</span>'}
           ${p.menus.length ? `<div class="discret menus">${echapper(p.menus.join(", "))}</div>` : ""}</li>`).join("")}</ul>
-        <footer>${c.etat === "servie" ? `<span class="discret">servie ${c.etat_le ? `à ${heure(c.etat_le)}` : ""}</span><span class="espace"></span><button class="btn petit principal" data-remettre>↩ Remettre en cuisine</button>`
-          : `${c.etat === "a_faire" ? '<button class="btn petit" data-etat="en_cours">En cours</button>' : ""}
+        <footer>${c.etat === "a_faire" ? '<button class="btn petit" data-etat="en_cours">En cours</button>' : ""}
           ${c.etat !== "prete" ? '<button class="btn petit vert" data-etat="prete">Prête ✓</button>' : ""}
-          <button class="btn petit" data-etat="servie" title="Retirer de l'écran">Servie →</button>`}</footer></article>`;
-    }).join("") : `<div class="vide">${voirServies ? (servies ? "Aucune commande servie ces dernières 48 h." : "Chargement…")
-      : liste.length ? "Rien dans ce filtre." : "Aucune commande en attente. Elles arrivent ici dès qu'elles sont encaissées."}</div>`;
-    $$(".puce-filtre", zone).forEach((b) => (b.onclick = async () => {
-      filtre = b.dataset.filtre;
-      if (filtre === "servies") { servies = null; dessiner(); await chargerServies(); }
-      dessiner();
-    }));
+          <button class="btn petit" data-etat="servie" title="Retirer de l'écran">Servie →</button></footer></article>`;
+    }).join("") : `<div class="vide">${liste.length ? "Rien dans ce filtre." : "Aucune commande en attente. Elles arrivent ici dès qu'elles sont encaissées."}</div>`;
+    $$(".puce-filtre", zone).forEach((b) => (b.onclick = () => { filtre = b.dataset.filtre; dessiner(); }));
     $("#cuisine-maj", vue).textContent = `Mis à jour à ${new Date().toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}`;
     dessinerBesoins();
-  };
-
-  const chargerServies = async () => {
-    try { servies = await rpc("cuisine_servies"); } catch (err) { servies = []; toast(messageErreur(err), true); }
-  };
-  const remettre = async (c) => {
-    // état d'après les plats déjà cochés : tous = prête, quelques-uns = en cours, aucun = à faire
-    const faits = new Set(c.faits || []), plats = eclater(c, idx);
-    const etat = plats.length && plats.every((p) => faits.has(p.cle)) ? "prete" : faits.size ? "en_cours" : "a_faire";
-    try {
-      await rpc("cuisine_etat", { p_id: c.id, p_etat: etat, p_faits: null });
-      if (servies) servies = servies.filter((x) => x.id !== c.id);
-      liste = [...liste.filter((x) => x.id !== c.id), { ...c, etat }]
-        .sort((a, b) => new Date(a.date) - new Date(b.date));
-      toast(`Commande n°${c.id} remise en cuisine.`); dessiner();
-    } catch (err) { toast(messageErreur(err), true); }
   };
 
   const changer = async (c, etat, faits) => {
@@ -178,10 +153,7 @@ function commandes(zone, vue, donnees, idx) {
     if (faits) c.faits = faits;
     if (etat === "servie") liste = liste.filter((x) => x.id !== c.id);
     dessiner();
-    try {
-      await rpc("cuisine_etat", { p_id: c.id, p_etat: etat || null, p_faits: faits || null });
-      if (etat === "servie") { servies = null; toast(`Commande n°${c.id} servie.`, false, { texte: "Annuler", faire: () => remettre({ ...c, etat: "servie", faits: avant.faits }) }); }
-    }
+    try { await rpc("cuisine_etat", { p_id: c.id, p_etat: etat || null, p_faits: faits || null }); }
     catch (err) { Object.assign(c, avant); if (etat === "servie") liste.push(c); liste.sort((a, b) => new Date(a.date) - new Date(b.date)); dessiner(); toast(messageErreur(err), true); }
   };
 
@@ -202,8 +174,6 @@ function commandes(zone, vue, donnees, idx) {
   zone.addEventListener("click", (e) => {
     const r = e.target.closest("[data-recette]");
     if (r) { const rec = idx.recettes.get(r.dataset.recette); if (rec) detailRecette(rec, idx); return; }
-    const rem = e.target.closest("[data-remettre]");
-    if (rem) { const c = (servies || []).find((x) => x.id === Number(rem.closest(".bon").dataset.id)); if (c) remettre(c); return; }
     const b = e.target.closest("[data-etat]"); if (!b) return;
     const c = liste.find((x) => x.id === Number(b.closest(".bon").dataset.id));
     if (c) changer(c, b.dataset.etat, null);
