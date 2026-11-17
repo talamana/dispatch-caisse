@@ -7,24 +7,24 @@ insert into logements (nom, gerant, ordre) values ('Appartement Vinewood', 'Tony
 
 -- Prix d'exemple (fictifs) : supérette / maraîcher / Raven-Sunny, niveau à garder, logement habituel
 with p (nom, sup, mar, fou, base, logement) as (values
-  ('Pot de lait entier', 400, null, 250, 300, 'Maison Sandy Shores'),
-  ('Farine',             250, null, 150, 200, 'Appartement Vinewood'),
-  ('Sucre',              200, null, 120, 200, 'Appartement Vinewood'),
-  ('Oeuf',               150, 90,   80,  150, 'Appartement Vinewood'),
+  ('Pot de lait entier', 400, null, 200, 300, 'Maison Sandy Shores'),
+  ('Farine',             300, null, 200, 200, 'Appartement Vinewood'),
+  ('Sucre',              200, null, 100, 200, 'Appartement Vinewood'),
+  ('Oeuf',               200, 100,   100,  150, 'Appartement Vinewood'),
   ('Chocolat Candybox',  500, null, 300, 100, 'Maison Sandy Shores'),
   ('Cuisse de volaille', 600, null, 400, 80,  'Maison Sandy Shores'),
   ('Steak haché',        600, null, 400, 80,  'Maison Sandy Shores'),
-  ('Pain à burger',      200, null, 120, 60,  'Appartement Vinewood'),
+  ('Pain à burger',      200, null, 100, 60,  'Appartement Vinewood'),
   ('Fromage',            300, null, 200, 100, 'Maison Sandy Shores'),
-  ('Pomme',              150, 80,   null, 100, 'Appartement Vinewood'),
-  ('Orange',             150, 80,   null, 100, 'Appartement Vinewood'),
+  ('Pomme',              200, 100,   null, 100, 'Appartement Vinewood'),
+  ('Orange',             200, 100,   null, 100, 'Appartement Vinewood'),
   ('Fraise',             200, 100,  null, 100, 'Appartement Vinewood'),
-  ('Pomme de terre',     100, 60,   null, 150, 'Maison Sandy Shores'),
-  ('Tomate',             120, 60,   null, 100, 'Maison Sandy Shores'),
-  ('Citron',             100, 60,   null, 60,  'Appartement Vinewood'),
-  ('Café en grains',     400, null, 250, 60,  'Appartement Vinewood'),
+  ('Pomme de terre',     100, 100,   null, 150, 'Maison Sandy Shores'),
+  ('Tomate',             100, 100,   null, 100, 'Maison Sandy Shores'),
+  ('Citron',             100, 100,   null, 60,  'Appartement Vinewood'),
+  ('Café en grains',     400, null, 200, 60,  'Appartement Vinewood'),
   ('Pot de miel',        500, null, 300, 40,  'Appartement Vinewood'),
-  ('Bouteille d''eau',   100, null, 50,  100, 'Appartement Vinewood'),
+  ('Bouteille d''eau',   100, null, 100,  100, 'Appartement Vinewood'),
   ('Saucisse de porc',   500, null, 300, 40,  'Maison Sandy Shores'),
   ('Pâte',               null, null, null, 40, 'Appartement Vinewood'))
 update ingredients i set prix_superette = p.sup, prix_maraicher = p.mar, prix_fournisseur = p.fou, stock_base = p.base,
@@ -90,12 +90,12 @@ declare vine bigint := (select id from logements where nom = 'Appartement Vinewo
 begin
   perform enregistrer_achat(jsonb_build_object('fournisseur', 'Raven', 'paiement', 'semaine', 'logement_id', vine,
     'date', debut_semaine() - interval '4 days' + interval '16 hours',
-    'lignes', '[{"nom": "Farine", "qte": 80, "prix": 150}, {"nom": "Sucre", "qte": 60, "prix": 120}, {"nom": "Oeuf", "qte": 40, "prix": 80}]'::jsonb));
+    'lignes', '[{"nom": "Farine", "qte": 80, "prix": 200}, {"nom": "Sucre", "qte": 60, "prix": 100}, {"nom": "Oeuf", "qte": 40, "prix": 100}]'::jsonb));
   perform enregistrer_achat(jsonb_build_object('fournisseur', 'Raven', 'paiement', 'semaine', 'logement_id', sandy,
     'date', debut_semaine() - interval '2 days' + interval '11 hours',
-    'lignes', '[{"nom": "Pot de lait entier", "qte": 100, "prix": 250}, {"nom": "Steak haché", "qte": 30, "prix": 400}]'::jsonb));
+    'lignes', '[{"nom": "Pot de lait entier", "qte": 100, "prix": 200}, {"nom": "Steak haché", "qte": 30, "prix": 400}]'::jsonb));
   perform enregistrer_achat(jsonb_build_object('fournisseur', 'Sunny', 'paiement', 'semaine', 'logement_id', sandy,
-    'lignes', '[{"nom": "Chocolat Candybox", "qte": 30, "prix": 300}, {"nom": "Café en grains", "qte": 20, "prix": 250}]'::jsonb));
+    'lignes', '[{"nom": "Chocolat Candybox", "qte": 30, "prix": 300}, {"nom": "Café en grains", "qte": 20, "prix": 200}]'::jsonb));
   perform enregistrer_achat(jsonb_build_object('fournisseur', 'Supérette', 'paiement', 'avance', 'avance_par', 'Tony Russo',
     'logement_id', vine, 'date', now() - interval '1 day',
     'lignes', '[{"nom": "Citron", "qte": 10, "prix": 100}, {"nom": "Pot de miel", "qte": 4, "prix": 500}]'::jsonb));
@@ -113,3 +113,12 @@ update stocks set quantite = 250 where ingredient = 'Pot de lait entier';
 insert into depenses (date, montant, categorie, fournisseur, description) values
   (now() - interval '6 days', 12000, 'essence', 'Station LTD', 'Plein du camion de livraison'),
   (now() - interval '9 days', 25000, 'services', 'Benny''s Motorworks', 'Réparation du camion');
+
+-- Historique fictif : commandes déjà livrées (avec qui a livré) et quelques cuissons
+update ventes set livre_par = case when id % 2 = 0 then 'Mia Costa' else 'Tony Russo' end,
+                  cuisine_le = date + interval '45 minutes'
+ where cuisine = 'servie';
+insert into journal_cuisine (date, recette_id, nom, fois, portions, par)
+select now() - interval '2 hours', id, nom, 2, 2 * produit, 'Mia Costa' from recettes_cuisine where id in ('boite_de_nuggets', 'compote', 'steak_frites');
+insert into journal_cuisine (date, recette_id, nom, fois, portions, par)
+select now() - interval '1 day', id, nom, 3, 3 * produit, 'Tony Russo' from recettes_cuisine where id in ('crepe', 'crepe_au_chocolat', 'limonade_a_la_pomme');

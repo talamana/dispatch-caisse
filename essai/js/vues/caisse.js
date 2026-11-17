@@ -17,16 +17,17 @@ const clientConnu = () => { const n = norm($("#nom-client").value); return n ? l
 // --- Calcul (identique à la base : arrondi ,5 vers le haut) -----------------------------------------
 function calculer() {
   const lignes = [...panier].filter(([id, q]) => articles[id] && q > 0).map(([id, q]) => ({ a: articles[id], q, montant: articles[id].prix * q }));
-  const sousTotal = lignes.reduce((s, l) => s + l.montant, 0);
+  const dollar = (c) => Math.round(c / 100) * 100;   // on ne joue pas les centimes (comme la base)
+  const sousTotal = dollar(lignes.reduce((s, l) => s + l.montant, 0));
   const t0 = carte.tarifs.find((x) => x.id === tarif) || carte.tarifs[0] || { id: null, nom: "", pourcentage: 0 };
   const pct = pctManuel !== null ? pctManuel : Number(t0.pourcentage || 0);
   const t = pct === Number(t0.pourcentage || 0) ? t0 : { ...t0, nom: pct < 0 ? "Remise" : "Majoration", pourcentage: pct };
-  const ajustement = Math.round(sousTotal * pct / 100);
+  const ajustement = dollar(sousTotal * pct / 100);
   const base = sousTotal + ajustement;
   let valeur = parseFloat(String($("#rabais-valeur").value).replace(",", "."));
   if (!Number.isFinite(valeur) || valeur < 0) valeur = 0;
   if (uniteRabais === "pourcent") valeur = Math.min(valeur, 100);
-  let rabais = uniteRabais === "pourcent" ? Math.round(base * valeur / 100) : Math.min(Math.round(valeur * 100), base);
+  let rabais = uniteRabais === "pourcent" ? dollar(base * valeur / 100) : Math.min(dollar(valeur * 100), base);
   rabais = Math.max(0, Math.min(rabais, base));
   return { lignes, sousTotal, ajustement, total: base - rabais, tarif: t, pct, rabais, rabaisValeur: rabais ? valeur : 0,
            rabaisUnite: uniteRabais, motif: $("#rabais-motif").value.trim() };

@@ -171,9 +171,9 @@ function recompter(cuissons, idx) {
     const p = idx.prix.get(norm(e.nom));
     e.lieu = lieuDAchat(p);
     e.prix = prixChez(p, e.lieu);
-    e.cout = e.prix == null ? null : e.prix * e.qte;
+    e.cout = e.prix == null ? null : Math.round(e.prix * e.qte / 100) * 100;   // pas de centimes
     if (e.cout == null) sansPrix++; else total += e.cout;
-    if (p?.prix_superette == null) sansPrixSuperette++; else toutSuperette += p.prix_superette * e.qte;
+    if (p?.prix_superette == null) sansPrixSuperette++; else toutSuperette += Math.round(p.prix_superette * e.qte / 100) * 100;
     const g = groupes.get(e.lieu) || { lieu: e.lieu, articles: [], total: 0, sansPrix: 0 };
     g.articles.push(e);
     if (e.cout == null) g.sansPrix++; else g.total += e.cout;

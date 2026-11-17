@@ -214,8 +214,10 @@ export const TYPES_CLIENT = {
   association: "Association", parti_politique: "Parti politique", syndicat: "Syndicat", service_public: "Service public",
 };
 export const FOURNISSEURS = ["Raven", "Sunny", "Maraîcher", "Supérette", "Autre"];
+// Raven et Sunny (entreprises RP) se paient à la semaine ; le maraîcher et la supérette, toujours sur place
+export const PAYE_A_LA_SEMAINE = ["Raven", "Sunny", "Autre"];
 export const PAIEMENTS_ACHAT = {
-  semaine: "À payer lundi (facture de la semaine)", avance: "Avancé par un gérant (à lui rembourser)", entreprise: "Payé par l'entreprise tout de suite",
+  semaine: "À payer lundi (facture de la semaine)", avance: "Payé sur place par un gérant (à lui rembourser)", entreprise: "Payé sur place par l'entreprise",
 };
 export const debutSemaine = (d = new Date()) => { const x = new Date(d); const j = (x.getDay() + 6) % 7; x.setHours(0, 0, 0, 0); x.setDate(x.getDate() - j); return x; };
 export const semaineFr = (d) => { const a = new Date(d), b = new Date(a); b.setDate(a.getDate() + 6);

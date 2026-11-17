@@ -23,11 +23,12 @@ const depuis = (d) => {
 };
 
 export async function afficher(vue, params) {
-  const onglet = ["commandes", "recettes"].includes(params[0]) ? params[0] : "cuire";
+  const onglet = ["commandes", "livraisons", "recettes"].includes(params[0]) ? params[0] : "cuire";
   vue.innerHTML = `<div class="page large"><div class="titre-page"><h1>Cuisine</h1><span class="discret" id="cuisine-maj"></span>
       <span class="espace"></span><input class="champ" id="cuisinier" placeholder="Qui cuisine ?" style="max-width:180px" value="${echapper(memoire.lire("dispatch_vendeur", ""))}"></div>
     <div class="onglets-page"><button data-onglet="cuire" aria-selected="${onglet === "cuire"}">🍳 À cuisiner</button>
       <button data-onglet="commandes" aria-selected="${onglet === "commandes"}">🧾 Commandes</button>
+      <button data-onglet="livraisons" aria-selected="${onglet === "livraisons"}">🚚 Livraisons</button>
       <button data-onglet="recettes" aria-selected="${onglet === "recettes"}">📖 Recettes</button></div>
     <div id="zone-cuisine"><div class="vide">Chargement…</div></div></div>`;
   $$("[data-onglet]", vue).forEach((b) => (b.onclick = () => { location.hash = `#/cuisine/${b.dataset.onglet}`; }));
@@ -37,7 +38,7 @@ export async function afficher(vue, params) {
   const zone = $("#zone-cuisine", vue);
   const ctx = { vue, zone, get donnees() { return donnees; }, idx: indexer(donnees), par: () => $("#cuisinier", vue).value.trim() || null };
   if (onglet === "recettes") return recettes(zone, donnees, ctx.idx);
-  const dessiner = onglet === "commandes" ? () => tickets(ctx) : () => aCuisiner(ctx);
+  const dessiner = onglet === "commandes" ? () => tickets(ctx) : onglet === "livraisons" ? () => livraisons(ctx) : () => aCuisiner(ctx);
   ctx.recharger = async () => { donnees = await rpc("cuisine"); ctx.idx = indexer(donnees); dessiner(); };
   dessiner();
   // Nouvelles commandes : on interroge la base toutes les 8 s
@@ -240,7 +241,7 @@ function tickets(ctx) {
       <div class="plats-ticket">${plats.map((p) => `<button class="plat-ticket ${p.faits >= p.qte ? "fait" : ""}" data-cle="${echapper(p.cle)}" title="Toucher : un de plus prêt (appui long ou clic droit : un de moins)">
         <span class="n">${p.faits >= p.qte ? "✓" : `${p.faits}/${p.qte}`}</span>${echapper(p.nom)}</button>`).join("")}</div>
       <footer>${c.etat !== "prete" ? '<button class="btn petit vert" data-etat="prete">Tout est prêt</button>' : ""}
-        <button class="btn petit" data-etat="servie">Servie →</button></footer></article>`;
+        <button class="btn petit" data-livrer title="Livrée au client : passe dans le résumé">Livrée ✓</button></footer></article>`;
   }).join("")}</div>` : '<div class="vide grand">✅ Aucune commande en attente.</div>';
 
   const changer = async (c, etat, faits) => {
@@ -257,6 +258,7 @@ function tickets(ctx) {
       const f = objetFaits(c); f[p.cle] = p.faits >= p.qte ? 0 : p.faits + 1;
       return changer(c, null, f);
     }
+    if (e.target.closest("[data-livrer]")) return livrer(ctx, c);
     const b = e.target.closest("[data-etat]");
     if (b) {
       if (b.dataset.etat === "prete") return changer(c, "prete", Object.fromEntries(c.plats.map((p) => [p.cle, p.qte])));
@@ -270,6 +272,96 @@ function tickets(ctx) {
     const p = c.plats.find((x) => x.cle === plat.dataset.cle);
     const f = objetFaits(c); f[p.cle] = Math.max(0, p.faits - 1);
     changer(c, null, f);
+  };
+}
+
+// --- Livraisons : on cuisine chez nous puis on livre ; le résumé garde la trace --------------------------
+const MODES = {
+  comptant: (c) => `💵 payé à la caisse (${fmt(c.total)})`,
+  semaine: (c) => `📅 sur la facture du lundi${c.payeur ? ` → ${c.payeur}` : ""} (${fmt(c.total)})`,
+  facture: (c) => `🧾 facture ${c.facture || ""} à payer (${fmt(c.total)})`,
+};
+const contenu = (c) => (c.lignes || []).map((l) => `${l.qte}× ${l.nom}`);
+function texteBon(c, par) {
+  return [`🚚 Bon de livraison — Le Dispatch`, `Commande n°${c.id} du ${new Date(c.date).toLocaleDateString("fr-FR")} à ${heure(c.date)}`,
+    `Client : ${c.client || "De passage"}`, ...contenu(c).map((x) => `- ${x}`), `Paiement : ${(MODES[c.mode] || MODES.comptant)(c).replace(/^\S+\s/, "")}`,
+    par || c.livre_par ? `Livré par : ${par || c.livre_par}` : null].filter(Boolean).join("\n").replace(/\u202f|\u00a0/g, " ");
+}
+async function copier(texte) {
+  try { await navigator.clipboard.writeText(texte); toast("Copié : colle-le où tu veux (Discord, notes…)."); }
+  catch { await fenetre({ titre: "À copier", contenu: `<textarea class="champ" rows="12" readonly>${echapper(texte)}</textarea>`, boutons: [{ texte: "Fermer" }] }); }
+}
+async function livrer(ctx, c) {
+  const pret = (c.plats || []).every((p) => !p.recette || p.faits >= p.qte);
+  const par = ctx.par();
+  if (!pret && !(await fenetre({ titre: `Livrer la commande n°${c.id} ?`, contenu: "<p>Tous les plats ne sont pas marqués prêts. La livrer quand même ?</p>",
+    boutons: [{ texte: "Retour" }, { texte: "Livrée quand même", classe: "principal", valeur: true }] }))) return;
+  try { await rpc("livrer", { p_id: c.id, p_par: par }); toast(`🚚 Commande n°${c.id} livrée${c.client ? ` à ${c.client}` : ""}.`); await ctx.recharger(); }
+  catch (err) { toast(messageErreur(err), true); }
+}
+
+let joursResume = 1;
+async function livraisons(ctx) {
+  const { zone } = ctx, d = ctx.donnees;
+  const resume = await rpc("cuisine_resume", { p_jours: joursResume });
+  if (!zone.isConnected) return;
+  // clé = date locale (tri), libellé = « mercredi 18 novembre »
+  const jour = (x) => { const t = new Date(x); return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}-${String(t.getDate()).padStart(2, "0")}`; };
+  const libelleJour = (k) => new Date(k + "T12:00").toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" });
+  const parJour = new Map();
+  for (const l of resume.livrees) { const k = jour(l.livree_le || l.date); if (!parJour.has(k)) parJour.set(k, []); parJour.get(k).push(l); }
+  const cuissonsJour = new Map();
+  for (const j of resume.cuissons) {
+    const k = jour(j.date);
+    if (!cuissonsJour.has(k)) cuissonsJour.set(k, new Map());
+    const m = cuissonsJour.get(k), e = m.get(j.nom) || { portions: 0, par: new Set() };
+    e.portions += j.portions; if (j.par) e.par.add(j.par); m.set(j.nom, e);
+  }
+  const jours = [...new Set([...parJour.keys(), ...cuissonsJour.keys()])].sort().reverse();
+  const aLivrer = [...d.commandes].sort((a, b) => (b.etat === "prete") - (a.etat === "prete") || a.id - b.id);
+  zone.innerHTML = `<div class="grille-livraison">
+    <section><h2 class="titre-section">🚚 À livrer</h2>
+      ${aLivrer.length ? `<div class="bons-livraison">${aLivrer.map((c) => {
+        const plats = c.plats || [], tot = plats.reduce((s2, p) => s2 + p.qte, 0), faits = plats.reduce((s2, p) => s2 + Math.min(p.faits, p.qte), 0);
+        return `<article class="bon-livraison ${c.etat}" style="--c:${couleur(c.id)}" data-id="${c.id}">
+          <header><span class="num">N°${c.id}</span><strong class="client">${echapper(c.client || "De passage")}</strong><span class="espace"></span>
+            ${c.etat === "prete" ? '<span class="badge vert">prête à livrer</span>' : `<span class="badge orange">en cuisine ${faits}/${tot}</span>`}</header>
+          <div class="discret">${heure(c.date)} · il y a ${depuis(c.date)}${c.vendeur ? ` · caisse : ${echapper(c.vendeur)}` : ""}</div>
+          <ul class="contenu-livraison">${contenu(c).map((x) => `<li>${echapper(x)}</li>`).join("")}</ul>
+          <div class="paiement">${echapper((MODES[c.mode] || MODES.comptant)(c))}</div>
+          <footer><button class="btn petit" data-bon>📋 Bon de livraison</button><button class="btn petit ${c.etat === "prete" ? "vert" : ""}" data-livrer>✓ Livrée</button></footer></article>`;
+      }).join("")}</div>` : '<div class="vide">Rien à livrer pour l\'instant.</div>'}
+    </section>
+    <section class="bloc"><div class="bloc-tete"><h2 class="titre-bloc">📜 Résumé</h2><span class="espace"></span>
+        <select class="champ" id="jours-resume" style="max-width:170px">${[[1, "Aujourd'hui"], [3, "3 derniers jours"], [7, "7 derniers jours"], [31, "31 derniers jours"]]
+          .map(([v, t]) => `<option value="${v}" ${v === joursResume ? "selected" : ""}>${t}</option>`).join("")}</select></div>
+      ${jours.length ? jours.map((k) => {
+        const liv = parJour.get(k) || [], cui = cuissonsJour.get(k) || new Map();
+        return `<div class="jour-resume"><div class="lieu-tete"><strong>${echapper(libelleJour(k))}</strong><span class="espace"></span>
+            ${liv.length} livraison${liv.length > 1 ? "s" : ""} · ${fmt(liv.reduce((s2, l) => s2 + l.total, 0))}
+            <button class="btn petit" data-copier-jour="${echapper(k)}">📋</button></div>
+          ${liv.length ? `<table class="liste compacte"><tbody>${liv.map((l) => `<tr><td class="nowrap">${heure(l.livree_le || l.date)}</td>
+            <td><span class="puce-cmd" style="--c:${couleur(l.id)}">N°${l.id}</span></td>
+            <td><strong>${echapper(l.client || "De passage")}</strong><div class="discret">${echapper(contenu(l).join(", "))}</div></td>
+            <td class="discret">${echapper((MODES[l.mode] || MODES.comptant)(l).split(" (")[0])}${l.livre_par ? `<div>🚚 ${echapper(l.livre_par)}</div>` : ""}</td>
+            <td class="droite nowrap"><strong>${fmt(l.total)}</strong></td></tr>`).join("")}</tbody></table>` : ""}
+          ${cui.size ? `<div class="discret cuissons-jour">🍳 Cuisiné : ${[...cui].map(([n, e]) => `${e.portions} ${echapper(n)}${e.par.size ? ` (${echapper([...e.par].join(", "))})` : ""}`).join(" · ")}</div>` : ""}</div>`;
+      }).join("") : '<div class="vide">Aucune livraison ni cuisson sur cette période.</div>'}
+    </section></div>`;
+  $("#cuisine-maj", ctx.vue).textContent = `· à jour ${new Date().toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}`;
+  $("#jours-resume", zone).onchange = (e) => { joursResume = Number(e.target.value); livraisons(ctx); };
+  zone.onclick = (e) => {
+    const cj = e.target.closest("[data-copier-jour]");
+    if (cj) {
+      const k = cj.dataset.copierJour, liv = parJour.get(k) || [], cui = cuissonsJour.get(k) || new Map();
+      return copier([`📜 Le Dispatch — ${libelleJour(k)}`, `${liv.length} livraison(s) · ${fmt(liv.reduce((s2, l) => s2 + l.total, 0))}`,
+        ...liv.map((l) => `- ${heure(l.livree_le || l.date)} N°${l.id} ${l.client || "De passage"} : ${contenu(l).join(", ")} — ${fmt(l.total)}${l.livre_par ? ` (livré par ${l.livre_par})` : ""}`),
+        cui.size ? `Cuisiné : ${[...cui].map(([n, x]) => `${x.portions} ${n}`).join(", ")}` : ""].filter(Boolean).join("\n").replace(/\u202f|\u00a0/g, " "));
+    }
+    const carte = e.target.closest(".bon-livraison"); if (!carte) return;
+    const c = d.commandes.find((x) => x.id === Number(carte.dataset.id)); if (!c) return;
+    if (e.target.closest("[data-bon]")) return copier(texteBon(c, ctx.par()));
+    if (e.target.closest("[data-livrer]")) return livrer(ctx, c);
   };
 }
 

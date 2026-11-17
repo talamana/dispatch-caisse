@@ -146,7 +146,7 @@ export async function editeurDocument(kind) {
   const recalculer = () => {
     let total = 0;
     $$(".ligne-doc", contenu).forEach((l, i) => {
-      const x = lire()[i], t = Number.isFinite(x.prix_unitaire) && x.quantite > 0 ? Math.round(x.quantite * x.prix_unitaire) : 0;
+      const x = lire()[i], t = Number.isFinite(x.prix_unitaire) && x.quantite > 0 ? Math.round(x.quantite * x.prix_unitaire / 100) * 100 : 0;
       $(".total", l).textContent = fmt(t); total += t;
     });
     $("#total-doc", contenu).textContent = `Total : ${fmt(total)}`;

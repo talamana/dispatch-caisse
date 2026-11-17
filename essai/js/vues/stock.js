@@ -4,7 +4,7 @@ import { q, rpc, table } from "../api.js";
 import { lieuDAchat, prixChez } from "../cuisine_calc.js";
 import {
   $, $$, brancherActions, confirmer, dateCourte, echapper, fenetre, FOURNISSEURS, fmt, formulaireEnFenetre, messageErreur,
-  PAIEMENTS_ACHAT, tableau, toast, versCentimes, enDollars,
+  PAIEMENTS_ACHAT, PAYE_A_LA_SEMAINE, tableau, toast, versCentimes, enDollars,
 } from "../outils.js";
 
 const ONGLETS = [["stock", "📦 Stock"], ["commander", "🛒 À commander"], ["achats", "🚚 Achats & dettes"], ["inventaire", "📝 Inventaire"], ["logements", "🏠 Logements"]];
@@ -99,7 +99,7 @@ async function commander(zone) {
   for (const m of manques) {
     const g = groupes.get(m.lieu) || { lieu: m.lieu, lignes: [], total: 0, sansPrix: 0 };
     g.lignes.push(m);
-    if (m.prix == null) g.sansPrix++; else g.total += m.prix * m.qte;
+    if (m.prix == null) g.sansPrix++; else g.total += Math.round(m.prix * m.qte / 100) * 100;
     groupes.set(m.lieu, g);
   }
   const liste = [...groupes.values()];
@@ -111,7 +111,7 @@ async function commander(zone) {
           <button class="btn petit principal" data-recu="${n}">✓ Reçu → enregistrer l'achat</button></div>
         <table class="liste compacte"><tbody>${g.lignes.map((m) => `<tr><td>${echapper(m.nom)}</td>
           <td class="droite discret">${nb(d.total(m.nom))} / ${nb(m.stock_base)}</td><td class="droite"><strong>${m.qte}</strong></td>
-          <td class="droite discret">${m.prix != null ? `${fmt(m.prix)} /u` : "—"}</td><td class="droite">${m.prix != null ? fmt(m.prix * m.qte) : "—"}</td></tr>`).join("")}</tbody></table></div>`).join("")
+          <td class="droite discret">${m.prix != null ? `${fmt(m.prix)} /u` : "—"}</td><td class="droite">${m.prix != null ? fmt(Math.round(m.prix * m.qte / 100) * 100) : "—"}</td></tr>`).join("")}</tbody></table></div>`).join("")
       : '<div class="vide">Rien à commander : tout est au-dessus du stock de base. 🎉</div>'}
       <p class="discret">Le stock de base de chaque ingrédient se règle dans l'onglet Stock (⚙️).</p></div>`;
   $$("[data-copier]", zone).forEach((b) => (b.onclick = async () => {
@@ -157,7 +157,7 @@ async function formulaireAchat(d, depart = {}) {
     let total = 0;
     $$(".ligne-doc", contenu).forEach((l) => {
       const [, qte, pu] = $$("input", l).map((x) => x.value.trim());
-      const t = Math.round((Number(qte.replace(",", ".")) || 0) * (versCentimes(pu) || 0));
+      const t = Math.round((Number(qte.replace(",", ".")) || 0) * (versCentimes(pu) || 0) / 100) * 100;
       $(".total", l).textContent = fmt(t); total += t;
     });
     $("#total-achat", contenu).textContent = `Total : ${fmt(total)}`;
@@ -178,8 +178,16 @@ async function formulaireAchat(d, depart = {}) {
   (depart.lignes?.length ? depart.lignes : [{}]).forEach((x) => ajouter(x.nom || "", x.qte || "", x.prix ?? null));
   recalculer();
   $("#ajout-ligne", contenu).onclick = () => ajouter();
+  // maraîcher / supérette : pas d'entreprise RP, donc pas de « à payer lundi »
+  const majPaiement = () => {
+    const hebdo = PAYE_A_LA_SEMAINE.includes(form.elements.fournisseur.value);
+    const opt = form.elements.paiement.querySelector('option[value="semaine"]');
+    opt.hidden = opt.disabled = !hebdo;
+    if (!hebdo && form.elements.paiement.value === "semaine") form.elements.paiement.value = "avance";
+  };
   const majAvance = () => $("#champ-avance", contenu).classList.toggle("masque", form.elements.paiement.value !== "avance");
-  form.elements.fournisseur.onchange = () => { form.elements.paiement.value = paiementDefaut(form.elements.fournisseur.value); majAvance(); };
+  form.elements.fournisseur.onchange = () => { form.elements.paiement.value = paiementDefaut(form.elements.fournisseur.value); majPaiement(); majAvance(); };
+  majPaiement();
   form.elements.paiement.onchange = majAvance;
   majAvance();
   return fenetre({ titre: "Enregistrer un achat", contenu, large: true, boutons: [
@@ -213,7 +221,8 @@ async function achats(zone) {
     const nomLog = (id) => d.logements.find((l) => l.id === id)?.nom || "";
     zone.innerHTML = `<div class="grille-2">
       <div class="bloc"><div class="bloc-tete"><h2 class="titre-bloc">🚚 À payer aux fournisseurs</h2></div>
-        <p class="discret">Raven et Sunny se paient en une fois, le lundi ou le mardi, pour les livraisons de la semaine précédente.</p>
+        <p class="discret">Raven et Sunny se paient en une fois, le lundi ou le mardi, pour les livraisons de la semaine précédente.
+          Le maraîcher et la supérette (pas des entreprises RP) se paient toujours sur place.</p>
         ${dettes.length ? `<ul class="alertes">${dettes.map((x, n) => `<li><div><strong>${echapper(x.fournisseur)}</strong>
             <div class="discret">${x.n} livraison(s) depuis le ${dateCourte(x.depuis)}${x.semaine_en_cours ? ` · ${fmt(x.semaine_en_cours)} de cette semaine (lundi prochain)` : ""}</div></div>
             <span style="margin-left:auto;text-align:right"><strong>${fmt(x.du_maintenant)}</strong> à payer
@@ -221,7 +230,7 @@ async function achats(zone) {
             ${x.semaine_en_cours ? `<button class="btn petit" data-payer-tout="${n}" title="Payer aussi cette semaine">Tout (${fmt(x.total)})</button>` : ""}</span></li>`).join("")}</ul>`
           : '<div class="vide">Rien à payer aux fournisseurs.</div>'}</div>
       <div class="bloc"><div class="bloc-tete"><h2 class="titre-bloc">💸 Avances des gérants</h2></div>
-        <p class="discret">Achats payés de leur poche (supérette…) : l'entreprise leur doit ces montants.</p>
+        <p class="discret">Achats payés de leur poche (supérette, maraîcher…) : l'entreprise leur doit ces montants.</p>
         ${avances.length ? `<ul class="alertes">${avances.map((x, n) => `<li><div><strong>${echapper(x.gerant)}</strong>
             <div class="discret">${x.depenses.map((p) => `${dateCourte(p.date)} ${echapper(p.fournisseur || "")} ${fmt(p.montant)}`).join(" · ")}</div></div>
             <span style="margin-left:auto"><strong>${fmt(x.total)}</strong> <button class="btn petit vert" data-rembourser="${n}">Remboursé</button></span></li>`).join("")}</ul>`

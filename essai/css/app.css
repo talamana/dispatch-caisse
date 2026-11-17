@@ -344,6 +344,23 @@ table.liste.compacte th { padding: 6px 8px; }
 .plat-ticket.fait { color: var(--discret); text-decoration: line-through; }
 .plat-ticket.fait .n { background: var(--vert); color: #fff; text-decoration: none; }
 .ticket-cuisine footer { display: flex; gap: 6px; justify-content: flex-end; }
+/* --- Livraisons ------------------------------------------------------------------------------------ */
+.grille-livraison { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 18px; align-items: start; }
+.titre-section { font-size: 20px; margin: 0 0 12px; }
+.bons-livraison { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
+.bon-livraison { background: var(--panneau); border: 1px solid var(--trait); border-left: 10px solid var(--c); border-radius: 14px; padding: 12px; display: flex; flex-direction: column; gap: 6px; }
+.bon-livraison.prete { border-color: var(--vert); border-left-color: var(--c); }
+.bon-livraison header { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.bon-livraison header .espace { flex: 1; }
+.bon-livraison .num { font-family: "Anton", sans-serif; font-size: 22px; color: var(--c); }
+.bon-livraison .client { font-size: 17px; }
+.contenu-livraison { margin: 0; padding-left: 18px; font-size: 15px; }
+.bon-livraison .paiement { font-size: 13px; background: var(--panneau-2); border-radius: 8px; padding: 5px 8px; }
+.bon-livraison footer { display: flex; gap: 6px; justify-content: flex-end; flex-wrap: wrap; }
+.jour-resume { margin-bottom: 14px; }
+.jour-resume .lieu-tete strong::first-letter { text-transform: uppercase; }
+.cuissons-jour { padding: 6px 8px; font-size: 13px; }
+@media (max-width: 980px) { .grille-livraison { grid-template-columns: 1fr; } }
 /* --- Version de test, stock -------------------------------------------------------------------- */
 .bandeau-essai { background: #f5c400; color: #111; padding: 6px 14px; font-size: 13px; text-align: center; }
 .bandeau-essai .lien { color: #111; text-decoration: underline; font-weight: 700; }
