@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>TEST — Le Dispatch</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+<header class="entete">
+  <a class="logo" href="#/caisse">LE <span>DISPATCH</span></a>
+  <nav class="nav" id="nav" aria-label="Navigation"></nav>
+  <button class="puce masque" id="puce-etat" type="button" title="Commandes en attente d'envoi"><span class="point"></span><span id="texte-etat"></span></button>
+  <button class="puce" id="puce-compte" type="button"></button>
+</header>
+<main id="vue"></main>
+<div class="toasts" id="toasts" aria-live="polite"></div>
+
+<script src="js/vendor/supabase.js"></script>
+<script src="js/config.js"></script>
+<script type="module" src="js/app.js"></script>
+</body>
+</html>
