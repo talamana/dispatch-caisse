@@ -886,16 +886,20 @@ begin
      group by p.id, p.nom, debut_semaine(v.date)) x), '[]');
 end $$;
 
--- Crée une facture par payeur et par semaine terminée ; relancer ne crée rien en double
-create or replace function facturer_semaines() returns jsonb
+-- Crée une facture par payeur et par semaine terminée ; relancer ne crée rien en double.
+-- p_payeur + p_en_cours : facture tout de suite la semaine en cours de ce payeur (il paie en avance)
+drop function if exists facturer_semaines();
+create or replace function facturer_semaines(p_payeur bigint default null, p_en_cours boolean default false) returns jsonb
 language plpgsql as $$
-declare g record; v ventes; lignes jsonb; d documents; faites jsonb := '[]';
+declare g record; v ventes; lignes jsonb; d documents; faites jsonb := '[]'; fin_periode timestamptz;
 begin
   perform exiger_gerant();
+  if p_en_cours and p_payeur is null then raise exception 'Choisis le client qui paie en avance.'; end if;
   for g in select v2.payeur_id, debut_semaine(v2.date) as semaine
              from ventes v2
             where v2.mode = 'semaine' and v2.facture_id is null and v2.payeur_id is not null
-              and v2.date < debut_semaine(now())
+              and (p_payeur is null or v2.payeur_id = p_payeur)
+              and (v2.date < debut_semaine(now()) or p_en_cours)
             group by 1, 2 order by 2, 1 loop
     lignes := '[]';
     for v in select * from ventes where mode = 'semaine' and facture_id is null and payeur_id = g.payeur_id
@@ -912,8 +916,11 @@ begin
     values ('facture', prochain_numero('facture'), g.payeur_id, lignes,
             (select sum((l ->> 'total')::bigint) from jsonb_array_elements(lignes) l), 'impayee',
             now() + interval '7 days',
-            'Commandes de la semaine du ' || date_fr(g.semaine) || ' au '
-              || to_char((g.semaine + interval '6 days') at time zone fuseau(), 'DD/MM/YYYY'))
+            case when g.semaine = debut_semaine(now())
+                 then 'Commandes du ' || date_fr(g.semaine) || ' au ' || to_char(now() at time zone fuseau(), 'DD/MM/YYYY')
+                      || ' (semaine en cours, facturée en avance)'
+                 else 'Commandes de la semaine du ' || date_fr(g.semaine) || ' au '
+                      || to_char((g.semaine + interval '6 days') at time zone fuseau(), 'DD/MM/YYYY') end)
     returning * into d;
     update ventes set facture_id = d.id
      where mode = 'semaine' and facture_id is null and payeur_id = g.payeur_id and debut_semaine(date) = g.semaine;

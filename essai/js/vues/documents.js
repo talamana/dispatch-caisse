@@ -44,8 +44,30 @@ export async function afficher(vue, params) {
         { titre: "Semaine", rendu: (x) => `${semaineFr(x.semaine)} ${x.a_faire ? '<span class="badge orange">à facturer</span>' : '<span class="badge">en cours</span>'}` },
         { titre: "Commandes", classe: "droite", rendu: (x) => x.n },
         { titre: "Montant", classe: "droite", rendu: (x) => `<strong>${fmt(x.total)}</strong>` },
+        { titre: "", classe: "droite", rendu: (x) => x.a_faire ? ""
+          : `<button class="btn petit" data-avance="${x.payeur_id}" title="Le client paie sa semaine avant lundi">💳 Payée en avance</button>` },
       ]) : '<div class="vide">Aucune commande en attente de facturation.</div>'}
-      ${cours.length ? `<p class="discret">Semaine en cours : ${fmt(cours.reduce((s2, x) => s2 + x.total, 0))} — facturé lundi prochain.</p>` : ""}</div>`;
+      ${cours.length ? `<p class="discret">Semaine en cours : ${fmt(cours.reduce((s2, x) => s2 + x.total, 0))} — facturé lundi prochain,
+        sauf si le client paie en avance (bouton 💳). Une facture déjà créée peut aussi être encaissée avant son échéance.</p>` : ""}</div>`;
+    $$("[data-avance]", zoneS).forEach((b) => (b.onclick = () => payerEnAvance(a.find((x) => String(x.payeur_id) === b.dataset.avance && !x.a_faire))));
+  };
+
+  // Le payeur règle sa semaine en cours avant lundi : facture créée tout de suite (et encaissée si coché)
+  const payerEnAvance = async (x) => {
+    if (!x) return;
+    const r = await fenetre({ titre: `${x.payeur} paie en avance`, contenu: `<p>Facturer maintenant les commandes de la semaine en cours :
+        <strong>${x.n} commande${x.n > 1 ? "s" : ""}, ${fmt(x.total)}</strong>.</p>
+      <p class="discret">Les commandes passées après aujourd'hui iront sur la facture de lundi prochain, comme d'habitude.</p>
+      <form class="form"><label class="case plein"><input type="checkbox" name="encaisser" checked> Payée maintenant (ajoutée au chiffre d'affaires)</label>
+        <label class="plein">Date du paiement<input type="date" name="date" value="${new Date().toISOString().slice(0, 10)}"></label></form>`,
+      boutons: [{ texte: "Annuler" }, { texte: "Créer la facture", classe: "principal", action: async (z) => {
+        const faites = await rpc("facturer_semaines", { p_payeur: x.payeur_id, p_en_cours: true });
+        if ($("[name=encaisser]", z).checked) {
+          for (const f of faites) await rpc("payer_facture", { p_id: f.id, p_quand: depuisChamp($("[name=date]", z).value, false) || new Date().toISOString() });
+        }
+        toast(`${faites.map((f) => f.numero).join(", ")} créée${$("[name=encaisser]", z).checked ? " et encaissée" : ""} (${fmt(faites.reduce((s2, f) => s2 + f.total, 0))}).`);
+      } }] });
+    if (r) charger();
   };
 
   const charger = async () => {
