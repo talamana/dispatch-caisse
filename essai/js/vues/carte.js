@@ -1,6 +1,6 @@
 // Carte du restaurant (articles, tarifs) et réglages de l'entreprise (Art. III).
 import { definirCode, q, table } from "../api.js";
-import { LIEUX, lieuDAchat, lireComposition } from "../cuisine_calc.js";
+import { LIEUX, lieuDAchat, lireComposition, normIngredient } from "../cuisine_calc.js";
 import { $, $$, brancherActions, confirmer, echapper, fenetre, fmt, formulaire, formulaireEnFenetre, lireFormulaire, tableau, toast } from "../outils.js";
 
 export async function afficher(vue, params) {
@@ -128,7 +128,7 @@ async function ingredients(zone) {
     { nom: "produit", libelle: "Unités obtenues par fabrication", type: "nombre", min: 1 },
     { nom: "note", libelle: "Remarque", type: "zone", plein: true },
   ];
-  const cle = (t) => sansAccent(t);
+  const cle = (t) => normIngredient(t);
   const lieuAffiche = (i) => {
     const l = lieuDAchat(i);
     return l ? `${echapper(l)}${i.fournisseur ? "" : ' <span class="discret">(moins cher)</span>'}` : '<span class="discret">à définir</span>';

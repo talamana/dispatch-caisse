@@ -674,12 +674,31 @@ language sql immutable as $$
     else null end
 $$;
 
+-- clé de comparaison : sans accents ni majuscules, espaces simplifiés, sans le « s » du pluriel
+-- (« pommes de terre » = « Pomme de terre »)
+create or replace function cle_ingredient(t text) returns text
+language sql immutable as $$
+  select regexp_replace(regexp_replace(norm(coalesce(synonyme_ingredient(t), t)), '\s+', ' ', 'g'), '([a-z])s(\s|$)', '\1\2', 'g')
+$$;
+
 create or replace function nom_ingredient(t text) returns text
 language sql stable as $$
   select coalesce(
-    (select i.nom from ingredients i where norm(i.nom) = norm(coalesce(synonyme_ingredient(t), t)) limit 1),
-    synonyme_ingredient(t), trim(t))
+    (select i.nom from ingredients i where cle_ingredient(i.nom) = cle_ingredient(t)
+      order by (i.nom = coalesce(synonyme_ingredient(t), trim(t))) desc, i.nom limit 1),
+    synonyme_ingredient(t), regexp_replace(trim(t), '\s+', ' ', 'g'))
 $$;
+
+-- Pas de doublon : ajouter « pommes de terre » quand « Pomme de terre » existe ne crée rien
+create or replace function ingredient_sans_doublon() returns trigger language plpgsql as $$
+begin
+  new.nom := regexp_replace(trim(new.nom), '\s+', ' ', 'g');
+  if exists (select 1 from ingredients i where cle_ingredient(i.nom) = cle_ingredient(new.nom)) then return null; end if;
+  return new;
+end $$;
+drop trigger if exists ingredient_sans_doublon on ingredients;
+create trigger ingredient_sans_doublon before insert on ingredients
+  for each row execute function ingredient_sans_doublon();
 
 -- lundi 00:00 (heure du serveur RP) de la semaine qui contient ts
 create or replace function debut_semaine(ts timestamptz default now()) returns timestamptz
@@ -1009,6 +1028,8 @@ create or replace function bouger_stock(p_ingredient text, p_logement bigint, p_
 language plpgsql as $$
 begin
   if p_delta = 0 or p_logement is null then return; end if;
+  p_ingredient := nom_ingredient(p_ingredient);
+  insert into ingredients (nom) values (p_ingredient) on conflict (nom) do nothing;
   insert into stocks (ingredient, logement_id, quantite) values (p_ingredient, p_logement, p_delta)
   on conflict (ingredient, logement_id) do update set quantite = stocks.quantite + excluded.quantite;
   insert into mouvements_stock (ingredient, logement_id, delta, raison, ref, par)
@@ -1022,6 +1043,7 @@ language plpgsql as $$
 declare reste numeric := p_qte; s record; pris numeric; detail jsonb := '[]'; habituel bigint; premier bigint;
 begin
   if p_qte <= 0 then return detail; end if;
+  p_ingredient := nom_ingredient(p_ingredient);
   select logement_id into habituel from ingredients where nom = p_ingredient;
   for s in select st.logement_id, st.quantite from stocks st where st.ingredient = p_ingredient and st.quantite > 0
             order by (st.logement_id = habituel) desc nulls last, st.quantite desc loop
@@ -1396,26 +1418,65 @@ update ventes v set cuisine_faits = coalesce((select jsonb_object_agg(x.cle, x.q
  where jsonb_typeof(v.cuisine_faits) = 'array';
 
 -- Synonymes (« Lait » = « Pot de lait entier », « Eau », « Miel », « Chocolat »…) : on fusionne dans le nom du jeu
-do $$
-declare cible text; source text;
+create or replace function fusionner_ingredient(source text, cible text) returns void
+language plpgsql as $$
+declare src ingredients;
 begin
-  for source, cible in select nom, synonyme_ingredient(nom) from ingredients
-                        where synonyme_ingredient(nom) is not null and nom <> synonyme_ingredient(nom) loop
-    insert into ingredients (nom) values (cible) on conflict (nom) do nothing;
-    update ingredients set
-      prix_superette   = coalesce(prix_superette,   (select prix_superette   from ingredients where nom = source)),
-      prix_maraicher   = coalesce(prix_maraicher,   (select prix_maraicher   from ingredients where nom = source)),
-      prix_fournisseur = coalesce(prix_fournisseur, (select prix_fournisseur from ingredients where nom = source)),
-      stock_base       = coalesce(stock_base,       (select stock_base       from ingredients where nom = source))
-     where nom = cible;
-    insert into stocks (ingredient, logement_id, quantite)
-    select cible, logement_id, quantite from stocks where ingredient = source
-    on conflict (ingredient, logement_id) do update set quantite = stocks.quantite + excluded.quantite;
-    update ingredients set composition = (
-        select coalesce(jsonb_agg(case when e ->> 'nom' = source then jsonb_set(e, '{nom}', to_jsonb(cible)) else e end), '[]')
-          from jsonb_array_elements(composition) e)
-     where composition @> jsonb_build_array(jsonb_build_object('nom', source));
-    delete from ingredients where nom = source;
+  select * into src from ingredients where nom = source;
+  if source = cible or not found then return; end if;
+  -- les recettes, compositions et l'historique pointent vers le bon nom
+  update ingredients set composition = (
+      select coalesce(jsonb_agg(case when e ->> 'nom' = source then jsonb_set(e, '{nom}', to_jsonb(cible)) else e end), '[]')
+        from jsonb_array_elements(composition) e)
+   where composition @> jsonb_build_array(jsonb_build_object('nom', source));
+  update recettes_cuisine set ingredients = (
+      select coalesce(jsonb_agg(case when e ->> 'nom' = source then jsonb_set(e, '{nom}', to_jsonb(cible)) else e end), '[]')
+        from jsonb_array_elements(ingredients) e)
+   where ingredients @> jsonb_build_array(jsonb_build_object('nom', source));
+  update articles set composition = (
+      select coalesce(jsonb_agg(case when e ->> 'nom' = source then jsonb_set(e, '{nom}', to_jsonb(cible)) else e end), '[]')
+        from jsonb_array_elements(composition) e)
+   where composition @> jsonb_build_array(jsonb_build_object('nom', source));
+  update mouvements_stock set ingredient = cible where ingredient = source;
+  if not exists (select 1 from ingredients where nom = cible) then
+    update ingredients set nom = cible where nom = source;          -- simple changement de nom (le stock suit)
+    return;
+  end if;
+  -- les deux existent : on garde « cible » et on complète avec ce que « source » avait
+  update ingredients set
+    prix_superette   = coalesce(prix_superette,   src.prix_superette),
+    prix_maraicher   = coalesce(prix_maraicher,   src.prix_maraicher),
+    prix_fournisseur = coalesce(prix_fournisseur, src.prix_fournisseur),
+    fournisseur      = coalesce(fournisseur,      src.fournisseur),
+    note             = coalesce(note,             src.note),
+    stock_base       = coalesce(stock_base,       src.stock_base),
+    logement_id      = coalesce(logement_id,      src.logement_id),
+    composition      = case when composition = '[]' then src.composition else composition end,
+    produit          = case when composition = '[]' then src.produit else produit end
+   where nom = cible;
+  insert into stocks (ingredient, logement_id, quantite)
+  select cible, logement_id, quantite from stocks where ingredient = source
+  on conflict (ingredient, logement_id) do update set quantite = stocks.quantite + excluded.quantite;
+  delete from ingredients where nom = source;
+end $$;
+revoke all on function fusionner_ingredient(text, text) from public;
+
+do $$
+declare r record;
+begin
+  -- 1. synonymes (« Lait » -> « Pot de lait entier »…)
+  for r in select nom, synonyme_ingredient(nom) as cible from ingredients
+            where synonyme_ingredient(nom) is not null and nom <> synonyme_ingredient(nom) loop
+    perform fusionner_ingredient(r.nom, r.cible);
+  end loop;
+  -- 2. doublons (« pommes de terre » = « Pomme de terre ») : on garde celui des recettes, sinon celui avec une majuscule
+  for r in select i.nom, (select j.nom from ingredients j where cle_ingredient(j.nom) = cle_ingredient(i.nom)
+                           order by exists (select 1 from recettes_cuisine rc
+                                             where rc.ingredients @> jsonb_build_array(jsonb_build_object('nom', j.nom))) desc,
+                                    (left(j.nom, 1) = upper(left(j.nom, 1))) desc, length(j.nom), j.nom
+                           limit 1) as cible
+             from ingredients i loop
+    perform fusionner_ingredient(r.nom, r.cible);
   end loop;
 end $$;
 
@@ -1819,6 +1880,8 @@ update clients c set type = 'service_public', facturation_hebdo = true,
  where lower(trim(c.nom)) in ('lscs', 'lsdwp') and c.facture_a is null;
 
 commit;
+
+notify pgrst, 'reload schema';   -- le site voit tout de suite les nouvelles fonctions
 
 -- ------------------------------------------------------------------------ Bilan --
 -- Une ligne par table : nombre de lignes avant (sauvegarde) et après. « après » ne doit jamais être plus petit,

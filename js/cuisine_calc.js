@@ -10,7 +10,11 @@ const SYNONYMES = {
 };
 const ALIAS = Object.fromEntries(Object.entries(SYNONYMES).map(([k, v]) => [k, v.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase()]));
 const sansAccents = (t) => String(t || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
-const norm = (t) => { const n = sansAccents(t); return ALIAS[n] || n; };
+// clé de comparaison (même règle que cle_ingredient() en SQL) : « pommes de terre » = « Pomme de terre »
+const norm = (t) => {
+  const n = sansAccents(t).replace(/\s+/g, " ");
+  return (ALIAS[n] || n).replace(/([a-z])s(?=\s|$)/g, "$1");
+};
 export const normIngredient = norm;
 // nom affiché d'un ingrédient (synonymes : « Lait » = « Pot de lait entier »)
 export const nomCanonique = (t) => SYNONYMES[sansAccents(t)] || String(t || "").trim();
