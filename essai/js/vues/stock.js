@@ -92,14 +92,15 @@ async function commander(zone) {
   const manques = d.ingredients.filter((i) => i.stock_base != null && d.total(i.nom) < i.stock_base)
     .map((i) => {
       const qte = Math.ceil(i.stock_base - d.total(i.nom));
-      const lieu = lieuDAchat(i);
-      return { ...i, qte, lieu, prix: prixChez(i, lieu) };
+      const fab = (i.composition || []).length > 0;          // Beurre, Pâte, Frites… : on le fabrique, on ne l'achète pas
+      const lieu = fab ? "🧪 À fabriquer" : lieuDAchat(i);
+      return { ...i, qte, lieu, fab, prix: fab ? null : prixChez(i, lieu) };
     });
   const groupes = new Map();
   for (const m of manques) {
     const g = groupes.get(m.lieu) || { lieu: m.lieu, lignes: [], total: 0, sansPrix: 0 };
     g.lignes.push(m);
-    if (m.prix == null) g.sansPrix++; else g.total += Math.round(m.prix * m.qte / 100) * 100;
+    if (m.fab) { /* fabriqué : pas de prix */ } else if (m.prix == null) g.sansPrix++; else g.total += Math.round(m.prix * m.qte / 100) * 100;
     groupes.set(m.lieu, g);
   }
   const liste = [...groupes.values()];
@@ -108,9 +109,9 @@ async function commander(zone) {
       ${liste.length ? liste.map((g, n) => `<div class="lieu-achat"><div class="lieu-tete"><strong>${echapper(g.lieu || "❓ Lieu à définir (aucun prix)")}</strong><span class="espace"></span>
           ${g.total ? fmt(g.total) : ""}${g.sansPrix ? ` <span class="discret">+ ${g.sansPrix} sans prix</span>` : ""}
           <button class="btn petit" data-copier="${n}">📋 Copier</button>
-          <button class="btn petit principal" data-recu="${n}">✓ Reçu → enregistrer l'achat</button></div>
+          ${g.lignes[0].fab ? '<span class="discret">avec : voir Carte › Ingrédients</span>' : `<button class="btn petit principal" data-recu="${n}">✓ Reçu → enregistrer l'achat</button>`}</div>
         <table class="liste compacte"><tbody>${g.lignes.map((m) => `<tr><td>${echapper(m.nom)}</td>
-          <td class="droite discret">${nb(d.total(m.nom))} / ${nb(m.stock_base)}</td><td class="droite"><strong>${m.qte}</strong></td>
+          <td class="droite discret">${nb(d.total(m.nom))} / ${nb(m.stock_base)}</td><td class="droite"><strong>${m.qte}</strong>${m.fab ? `<div class="discret">${echapper(m.composition.map((c) => `${c.qte * m.qte} ${c.nom}`).join(", "))}</div>` : ""}</td>
           <td class="droite discret">${m.prix != null ? `${fmt(m.prix)} /u` : "—"}</td><td class="droite">${m.prix != null ? fmt(Math.round(m.prix * m.qte / 100) * 100) : "—"}</td></tr>`).join("")}</tbody></table></div>`).join("")
       : '<div class="vide">Rien à commander : tout est au-dessus du stock de base. 🎉</div>'}
       <p class="discret">Le stock de base de chaque ingrédient se règle dans l'onglet Stock (⚙️).</p></div>`;

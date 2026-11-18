@@ -14,8 +14,8 @@ with p (nom, sup, mar, fou, base, logement) as (values
   ('Chocolat Candybox',  500, null, 300, 100, 'Maison Sandy Shores'),
   ('Cuisse de volaille', 600, null, 400, 80,  'Maison Sandy Shores'),
   ('Steak haché',        600, null, 400, 80,  'Maison Sandy Shores'),
-  ('Pain à burger',      200, null, 100, 60,  'Appartement Vinewood'),
-  ('Fromage',            300, null, 200, 100, 'Maison Sandy Shores'),
+  ('Pain',               100, null, 100, 60,  'Appartement Vinewood'),
+  ('Fromage',            null, null, null, 40, 'Maison Sandy Shores'),
   ('Pomme',              200, 100,   null, 100, 'Appartement Vinewood'),
   ('Orange',             200, 100,   null, 100, 'Appartement Vinewood'),
   ('Fraise',             200, 100,  null, 100, 'Appartement Vinewood'),
@@ -33,11 +33,6 @@ update ingredients i set prix_superette = p.sup, prix_maraicher = p.mar, prix_fo
   from p where i.nom = p.nom;
 update ingredients set fournisseur = 'Sunny' where nom in ('Chocolat Candybox', 'Café en grains', 'Pot de miel');
 
--- Ingrédient combiné d'exemple (fictif) : la Pâte se fabrique
-update ingredients set composition = '[{"nom": "Farine", "qte": 2}, {"nom": "Oeuf", "qte": 1}, {"nom": "Bouteille d''eau", "qte": 1}]',
-       produit = 4, note = 'Exemple fictif : 2 Farine + 1 Oeuf + 1 Bouteille d''eau = 4 Pâtes'
- where nom = 'Pâte';
-
 -- Stock compté (fictif)
 insert into stocks (ingredient, logement_id, quantite)
 select i.nom, l.id, q.qte from (values
@@ -47,7 +42,7 @@ select i.nom, l.id, q.qte from (values
   ('Fromage', 'Maison Sandy Shores', 40), ('Pomme', 'Appartement Vinewood', 70), ('Orange', 'Appartement Vinewood', 50),
   ('Fraise', 'Appartement Vinewood', 35), ('Pomme de terre', 'Maison Sandy Shores', 90), ('Tomate', 'Maison Sandy Shores', 40),
   ('Citron', 'Appartement Vinewood', 20), ('Café en grains', 'Appartement Vinewood', 25), ('Pot de miel', 'Appartement Vinewood', 12),
-  ('Bouteille d''eau', 'Appartement Vinewood', 80), ('Saucisse de porc', 'Maison Sandy Shores', 15), ('Pâte', 'Appartement Vinewood', 8)
+  ('Bouteille d''eau', 'Appartement Vinewood', 80), ('Saucisse de porc', 'Maison Sandy Shores', 15), ('Pâte', 'Appartement Vinewood', 8), ('Pain', 'Appartement Vinewood', 40)
 ) q (nom, logement, qte) join ingredients i on i.nom = q.nom join logements l on l.nom = q.logement;
 
 -- Clients (fictifs)
@@ -101,7 +96,7 @@ begin
     'lignes', '[{"nom": "Citron", "qte": 10, "prix": 100}, {"nom": "Pot de miel", "qte": 4, "prix": 500}]'::jsonb));
   perform enregistrer_achat(jsonb_build_object('fournisseur', 'Supérette', 'paiement', 'avance', 'avance_par', 'Mia Costa',
     'logement_id', sandy, 'date', now() - interval '3 days',
-    'lignes', '[{"nom": "Fromage", "qte": 10, "prix": 300}]'::jsonb));
+    'lignes', '[{"nom": "Pain", "qte": 30, "prix": 100}]'::jsonb));
 end $$;
 -- les achats ci-dessus ont été ajoutés au stock compté : on garde les quantités d'exemple
 update stocks s set quantite = s.quantite - coalesce((select sum((l ->> 'qte')::numeric) from achats a, jsonb_array_elements(a.lignes) l

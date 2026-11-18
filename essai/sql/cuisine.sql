@@ -217,6 +217,17 @@ insert into ingredients (nom) values ('Truite crue') on conflict (nom) do nothin
 insert into ingredients (nom) values ('Viande de gibier') on conflict (nom) do nothing;
 insert into ingredients (nom) values ('Viande séchée') on conflict (nom) do nothing;
 
+-- Ingrédients fabriqués (pas achetés) : composition et unités par fabrication
+update ingredients set composition = '[{"nom": "Pot de lait entier", "qte": 2}]'::jsonb, produit = 1 where nom = 'Beurre' and composition = '[]'::jsonb;
+update ingredients set composition = '[{"nom": "Pot de lait entier", "qte": 3}]'::jsonb, produit = 1 where nom = 'Crème fraîche' and composition = '[]'::jsonb;
+update ingredients set composition = '[{"nom": "Pomme de terre", "qte": 1}]'::jsonb, produit = 1 where nom = 'Frites' and composition = '[]'::jsonb;
+update ingredients set composition = '[{"nom": "Pot de lait entier", "qte": 1}]'::jsonb, produit = 1 where nom = 'Fromage' and composition = '[]'::jsonb;
+update ingredients set composition = '[{"nom": "Pain", "qte": 1}]'::jsonb, produit = 1 where nom = 'Pain à burger' and composition = '[]'::jsonb;
+update ingredients set composition = '[{"nom": "Farine", "qte": 1}, {"nom": "Oeuf", "qte": 1}, {"nom": "Pot de lait entier", "qte": 1}]'::jsonb, produit = 1 where nom = 'Pâte' and composition = '[]'::jsonb;
+update ingredients set composition = '[{"nom": "Pâte", "qte": 1}]'::jsonb, produit = 1 where nom = 'Pâte fraîche' and composition = '[]'::jsonb;
+update ingredients set composition = '[{"nom": "Pâte", "qte": 1}]'::jsonb, produit = 1 where nom = 'Pâte à pizza' and composition = '[]'::jsonb;
+update ingredients set composition = '[{"nom": "Farine", "qte": 1}, {"nom": "Pot de lait entier", "qte": 1}]'::jsonb, produit = 1 where nom = 'Semoule' and composition = '[]'::jsonb;
+
 update articles set composition = '[{"recette": "boite_de_nuggets", "qte": 1}, {"recette": "chocolat_chaud", "qte": 1}, {"recette": "compote", "qte": 1}]'::jsonb where id = 'cadet' and composition = '[]'::jsonb;
 update articles set composition = '[{"recette": "bucket_de_poulet", "qte": 1}, {"recette": "orangeade", "qte": 1}, {"recette": "donuts_a_la_fraise", "qte": 1}]'::jsonb where id = 'officier' and composition = '[]'::jsonb;
 update articles set composition = '[{"recette": "pizza_fruitee", "qte": 1}, {"recette": "milkshake_a_la_fraise", "qte": 1}, {"recette": "brochette_de_fruits", "qte": 1}]'::jsonb where id = 'interne' and composition = '[]'::jsonb;

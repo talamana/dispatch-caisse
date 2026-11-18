@@ -1,7 +1,7 @@
 // VERSION DE TEST : une vraie base PostgreSQL qui tourne dans le navigateur (PGlite), avec des données fictives.
 // Elle imite l'API Supabase (PostgREST) pour que le site fonctionne exactement comme en ligne,
 // mais rien ne sort de cet appareil : la vraie base n'est jamais contactée.
-const VERSION = "v2-3";   // à changer à chaque mise à jour de la base de test (repart des données d'exemple)
+const VERSION = "v2-4";   // à changer à chaque mise à jour de la base de test (repart des données d'exemple)
 const FICHIERS = ["supabase_local.sql", "schema.sql", "carte.sql", "cuisine.sql", "organismes.sql", "demo.sql"];
 const CLE_SUFFIXE = "dispatch_essai_suffixe";
 

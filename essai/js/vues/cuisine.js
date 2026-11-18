@@ -126,9 +126,32 @@ function aCuisiner(ctx) {
     const sous = idx.recettesParNom.get(normIngredient(i.nom));
     if (sous && sous.id !== l.r.id) continue;
     const k = normIngredient(i.nom);
-    const e = besoinIng.get(k) || { nom: i.nom, qte: 0 };
-    e.qte += (Number(i.qte) || 1) * l.cuissons; besoinIng.set(k, e);
+    const e = besoinIng.get(k) || { nom: i.nom, qte: 0, pour: new Set() };
+    e.qte += (Number(i.qte) || 1) * l.cuissons; if (l.cuissons) e.pour.add(l.r.nom); besoinIng.set(k, e);
   }
+  // ingrédients qu'on fabrique (Beurre, Pâte, Frites…) : ce que le stock ne couvre pas est à fabriquer avant,
+  // et ses composants s'ajoutent à la liste (du plus « haut » au plus « bas » : Pâte à pizza avant Pâte)
+  const stockTotal = (nom) => (d.stocks || []).filter((x) => x.ingredient === nom).reduce((a, x) => a + Math.max(0, Number(x.quantite)), 0);
+  const fabrications = [];
+  const vus = new Set();
+  for (;;) {
+    const k = [...besoinIng.keys()].filter((x) => !vus.has(x) && (idx.prix.get(x)?.composition || []).length)
+      .sort((a, b) => idx.niveauI.get(a) - idx.niveauI.get(b))[0];
+    if (k === undefined) break;
+    vus.add(k);
+    const e = besoinIng.get(k), ing = idx.prix.get(k);
+    const manque = Math.max(0, e.qte - stockTotal(ing.nom));
+    if (!manque) continue;
+    const produit = Math.max(1, Number(ing.produit) || 1), fois = Math.ceil(manque / produit);
+    fabrications.push({ ing, fois, qte: fois * produit, pour: [...e.pour] });
+    e.qte -= manque;                                     // le reste vient du stock
+    for (const c of ing.composition) {
+      const kc = normIngredient(c.nom);
+      const ec = besoinIng.get(kc) || { nom: c.nom, qte: 0, pour: new Set() };
+      ec.qte += (Number(c.qte) || 1) * fois; ec.pour.add(ing.nom); besoinIng.set(kc, ec);
+    }
+  }
+  const aFabriquer = new Set(fabrications.map((f) => f.ing.nom));
   const parLogement = new Map(), manques = [];
   for (const e of besoinIng.values()) {
     if (!e.qte) continue;
@@ -151,7 +174,8 @@ function aCuisiner(ctx) {
         return `<li class="sous"><b>${i.qte}×</b> ${echapper(sous.nom)} <span class="${dispo >= i.qte ? "vert" : "orange"}">${dispo >= i.qte ? `✓ ${dispo} prête(s)` : "à préparer d'abord ↓"}</span></li>`;
       }
       const o = ouPrendre(i.nom, Number(i.qte) || 1, d, idx);
-      const ou = o.pris.length ? `📍 ${echapper(courtLogement(d, o.pris[0].logement))}` : '<span class="rouge">⚠ pas en stock</span>';
+      const ou = aFabriquer.has(o.nom) ? '<span class="orange">🧪 à fabriquer d\'abord ↓</span>'
+        : o.pris.length ? `📍 ${echapper(courtLogement(d, o.pris[0].logement))}` : '<span class="rouge">⚠ pas en stock</span>';
       return `<li><b>${i.qte}×</b> ${echapper(o.nom)} <span class="discret">${ou}</span></li>`;
     }).join("");
     const portionsParCuisson = Math.max(1, r.produit);
@@ -168,13 +192,26 @@ function aCuisiner(ctx) {
         : '<div class="vert">✓ La réserve suffit</div>'}</footer></article>`;
   };
 
+  const tuileFab = (f) => `<article class="tuile-plat sous-recette fabrication" data-ingredient="${echapper(f.ing.nom)}">
+      <header><div class="compte">${f.qte}</div><div class="titre-plat"><h3 class="sans-lien">🧪 ${echapper(f.ing.nom)}</h3>
+        <div class="discret">à fabriquer pour : ${echapper(f.pour.join(", "))}${f.ing.produit > 1 ? ` · ${f.ing.produit} par fabrication` : ""}</div></div></header>
+      <ul class="ingr">${f.ing.composition.map((c) => {
+        const o = ouPrendre(c.nom, Number(c.qte) || 1, d, idx);
+        const ou = aFabriquer.has(o.nom) ? '<span class="orange">🧪 à fabriquer d\'abord</span>'
+          : o.pris.length ? `📍 ${echapper(courtLogement(d, o.pris[0].logement))}` : '<span class="rouge">⚠ pas en stock</span>';
+        return `<li><b>${c.qte}×</b> ${echapper(o.nom)} <span class="discret">${ou}</span></li>`;
+      }).join("")}</ul>
+      <footer><button class="btn gros principal" data-fabriquer="${echapper(f.ing.nom)}" data-fois="${f.fois}">🧪 Fabriquer${f.fois > 1 ? ` ×${f.fois}` : ""}</button></footer></article>`;
+  // ordre de travail : d'abord les ingrédients à fabriquer (Pâte avant Pâte à pizza), puis les plats
+  fabrications.sort((a, b) => idx.niveauI.get(normIngredient(b.ing.nom)) - idx.niveauI.get(normIngredient(a.ing.nom)));
+
   zone.innerHTML = `<div class="cuisine">
     <section>
       <div class="resume-cuisine"><div><strong>${nbCmd}</strong> commande${nbCmd > 1 ? "s" : ""} en attente</div><div><strong>${nbPlats}</strong> plat${nbPlats > 1 ? "s" : ""} à servir</div>
         <div><strong>${lignes.reduce((s, l) => s + l.cuissons, 0)}</strong> cuisson${lignes.reduce((s, l) => s + l.cuissons, 0) > 1 ? "s" : ""}</div></div>
       ${ctx.donnees.commandes.length > 1 ? `<div class="filtres filtre-cmd"><button class="puce-filtre" data-filtre-cmd="" aria-pressed="${!filtreCmd}">Toutes</button>${ctx.donnees.commandes.map((c) =>
         `<button class="puce-filtre" data-filtre-cmd="${c.id}" aria-pressed="${filtreCmd === c.id}" style="border-color:${couleur(c.id)}">N°${c.id}${c.client ? ` · ${echapper(c.client)}` : ""}</button>`).join("")}</div>` : ""}
-      ${lignes.length ? `<div class="tuiles-plats">${lignes.map(tuile).join("")}</div>` : '<div class="vide grand">✅ Rien à cuisiner. Les commandes arrivent ici dès qu\'elles sont passées à la caisse.</div>'}
+      ${lignes.length ? `<div class="tuiles-plats">${fabrications.map(tuileFab).join("")}${lignes.map(tuile).join("")}</div>` : '<div class="vide grand">✅ Rien à cuisiner. Les commandes arrivent ici dès qu\'elles sont passées à la caisse.</div>'}
       ${sansRecette.length ? `<div class="bloc"><h3 class="sous-titre">À donner aussi (pas de recette)</h3><div class="puces">${sansRecette.map(({ c, p }) =>
         `<span class="badge">${p.qte - p.faits}× ${echapper(p.nom)}</span> ${puceCmd(c.id, 1)}`).join(" ")}</div></div>` : ""}
     </section>
@@ -187,8 +224,7 @@ function aCuisiner(ctx) {
           const lieu = lieuDAchat(m.ing);
           return `<tr><td>${echapper(m.nom)}</td><td class="droite"><strong>${nb(m.qte)}</strong></td><td class="discret">${echapper(lieu || "lieu à définir")}</td></tr>`;
         }).join("")}</tbody></table>
-        ${manques.some((m) => (m.ing?.composition || []).length) ? `<div class="puces">${manques.filter((m) => (m.ing?.composition || []).length).map((m) =>
-          `<button class="btn petit" data-fabriquer="${echapper(m.nom)}" data-fois="${Math.ceil(m.qte / Math.max(1, m.ing.produit || 1))}">🧪 Fabriquer ${echapper(m.nom)}</button>`).join("")}</div>` : ""}` : ""}
+` : ""}
       <div class="actions-ligne"><button class="btn" data-copier>📋 Copier la liste</button></div>
     </aside></div>`;
   $("#cuisine-maj", ctx.vue).textContent = `· à jour ${new Date().toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}`;
@@ -198,12 +234,13 @@ function aCuisiner(ctx) {
     if (f) { filtreCmd = f.dataset.filtreCmd ? Number(f.dataset.filtreCmd) : null; return aCuisiner(ctx); }
     const pc = e.target.closest(".tuile-plat .puce-cmd");
     if (pc) { filtreCmd = Number(pc.dataset.cmd); return aCuisiner(ctx); }
-    const titre = e.target.closest(".titre-plat h3");
+    const titre = e.target.closest(".titre-plat h3:not(.sans-lien)");
     if (titre) { const r = idx.recettes.get(titre.closest("[data-recette]").dataset.recette); if (r) detailRecette(r, idx); return; }
     const b = e.target.closest("[data-cuire],[data-servir],[data-fabriquer],[data-copier]");
     if (!b || b.disabled) return;
     if (b.dataset.copier !== undefined) {
       const texte = "À aller chercher :\n" + [...parLogement].map(([log, g]) => `${nomLogement(d, log)} : ${g.map((x) => `${nb(x.qte)} ${x.nom}`).join(", ")}`).join("\n")
+        + (fabrications.length ? `\nÀ fabriquer : ${fabrications.map((f) => `${f.qte} ${f.ing.nom}`).join(", ")}` : "")
         + (manques.length ? `\nÀ acheter : ${manques.map((m) => `${nb(m.qte)} ${m.nom}`).join(", ")}` : "");
       try { await navigator.clipboard.writeText(texte); toast("Liste copiée."); } catch { toast(texte); }
       return;
