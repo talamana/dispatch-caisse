@@ -619,6 +619,9 @@ create table if not exists achats (
 );
 create index if not exists achats_dus on achats (fournisseur) where paye_le is null;
 
+-- -------------------------------------------------------------- Version --
+create or replace function version_schema() returns int language sql immutable as $$ select 2 $$;
+
 -- ---------------------------------------------------------------------- Outils --
 create or replace function norm(t text) returns text
 language sql immutable as $$
@@ -627,14 +630,23 @@ language sql immutable as $$
 $$;
 
 -- Nom d'un ingrédient tel qu'il est dans la liste (accents, majuscules, synonymes : « Lait » = « Pot de lait entier »)
+-- synonymes : ce qu'on écrit -> le nom du produit dans le jeu
+create or replace function synonyme_ingredient(t text) returns text
+language sql immutable as $$
+  select case norm(t)
+    when 'lait' then 'Pot de lait entier' when 'pot de lait' then 'Pot de lait entier' when 'lait entier' then 'Pot de lait entier'
+    when 'pots de lait' then 'Pot de lait entier'
+    when 'eau' then 'Bouteille d''eau' when 'bouteille eau' then 'Bouteille d''eau'
+    when 'miel' then 'Pot de miel'
+    when 'chocolat' then 'Chocolat Candybox' when 'candybox' then 'Chocolat Candybox'
+    else null end
+$$;
+
 create or replace function nom_ingredient(t text) returns text
 language sql stable as $$
   select coalesce(
-    (select i.nom from ingredients i
-      where norm(i.nom) = case when norm(t) in ('lait', 'pot de lait', 'lait entier') then 'pot de lait entier'
-                               else norm(t) end
-      limit 1),
-    case when norm(t) in ('lait', 'pot de lait', 'lait entier') then 'Pot de lait entier' else trim(t) end)
+    (select i.nom from ingredients i where norm(i.nom) = norm(coalesce(synonyme_ingredient(t), t)) limit 1),
+    synonyme_ingredient(t), trim(t))
 $$;
 
 -- lundi 00:00 (heure du serveur RP) de la semaine qui contient ts
@@ -1351,11 +1363,12 @@ update ventes v set cuisine_faits = coalesce((select jsonb_object_agg(x.cle, x.q
                                               where v.cuisine_faits ? x.cle), '{}')
  where jsonb_typeof(v.cuisine_faits) = 'array';
 
--- « Lait » = « Pot de lait entier » (même produit) : on fusionne
+-- Synonymes (« Lait » = « Pot de lait entier », « Eau », « Miel », « Chocolat »…) : on fusionne dans le nom du jeu
 do $$
-declare cible text := 'Pot de lait entier'; source text;
+declare cible text; source text;
 begin
-  for source in select nom from ingredients where norm(nom) in ('lait', 'pot de lait', 'lait entier') and nom <> cible loop
+  for source, cible in select nom, synonyme_ingredient(nom) from ingredients
+                        where synonyme_ingredient(nom) is not null and nom <> synonyme_ingredient(nom) loop
     insert into ingredients (nom) values (cible) on conflict (nom) do nothing;
     update ingredients set
       prix_superette   = coalesce(prix_superette,   (select prix_superette   from ingredients where nom = source)),

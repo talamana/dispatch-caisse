@@ -12,9 +12,11 @@ function memoriser(j) {
 export const sb = window.supabase.createClient(CFG.url, CFG.cle, {
   auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
   global: {
-    fetch: (url, options = {}) => {
+    fetch: async (url, options = {}) => {
       const entetes = new Headers(options.headers || {});
       if (jeton) entetes.set("x-gerant", jeton);
+      // version de test : base locale dans le navigateur, la vraie base n'est jamais contactée
+      if (CFG.essai) return (await import("./essai/backend.js")).fauxFetch(url, { ...options, headers: entetes });
       return fetch(url, { ...options, headers: entetes });
     },
   },
@@ -66,4 +68,13 @@ export async function clients(recharger = false) {
 export const oublierClients = () => { cacheClients = null; };
 export async function nomsClients() {
   return Object.fromEntries((await clients()).map((c) => [c.id, c.nom]));
+}
+
+// Factures du lundi : crée celles des semaines terminées (au plus une fois par heure et par appareil).
+// Renvoie la liste des factures créées.
+let derniereFacturation = 0;
+export async function facturerSiBesoin(forcer = false) {
+  if (!forcer && Date.now() - derniereFacturation < 3600_000) return [];
+  derniereFacturation = Date.now();
+  try { return await rpc("facturer_semaines"); } catch { derniereFacturation = 0; return []; }
 }

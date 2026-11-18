@@ -2,12 +2,18 @@
 // - eclater : une commande de caisse -> les plats à préparer (les menus sont séparés en plats)
 // - besoins : des plats -> les cuissons à lancer et les ingrédients à réunir (sous-recettes comprises)
 
-const ALIAS = { "lait": "pot de lait entier", "pot de lait": "pot de lait entier", "lait entier": "pot de lait entier" };
+// synonymes : ce qu'on écrit -> le nom du produit dans le jeu (même liste que synonyme_ingredient() en SQL)
+const SYNONYMES = {
+  "lait": "Pot de lait entier", "pot de lait": "Pot de lait entier", "lait entier": "Pot de lait entier", "pots de lait": "Pot de lait entier",
+  "eau": "Bouteille d'eau", "bouteille eau": "Bouteille d'eau", "miel": "Pot de miel",
+  "chocolat": "Chocolat Candybox", "candybox": "Chocolat Candybox",
+};
+const ALIAS = Object.fromEntries(Object.entries(SYNONYMES).map(([k, v]) => [k, v.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase()]));
 const sansAccents = (t) => String(t || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
 const norm = (t) => { const n = sansAccents(t); return ALIAS[n] || n; };
 export const normIngredient = norm;
 // nom affiché d'un ingrédient (synonymes : « Lait » = « Pot de lait entier »)
-export const nomCanonique = (t) => (ALIAS[sansAccents(t)] ? "Pot de lait entier" : String(t || "").trim());
+export const nomCanonique = (t) => SYNONYMES[sansAccents(t)] || String(t || "").trim();
 
 export function indexer({ articles = [], recettes = [], ingredients = [] }) {
   const parId = new Map(recettes.map((r) => [r.id, r]));

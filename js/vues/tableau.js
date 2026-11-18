@@ -1,6 +1,6 @@
 // Tableau de bord : le mois en cours en un coup d'œil.
-import { rpc, q, table } from "../api.js";
-import { CATEGORIES_DEPENSE, dateFr, echapper, fmt, libelleMois, pourcent, TYPES_CLIENT } from "../outils.js";
+import { facturerSiBesoin, rpc, q, table } from "../api.js";
+import { CATEGORIES_DEPENSE, dateFr, echapper, fmt, libelleMois, pourcent, toast, TYPES_CLIENT } from "../outils.js";
 
 function seuil(benefice, reglages) {
   const tranches = reglages?.tranches || [[50000, 0], [150000, 0.2], [null, 0.3]];
@@ -19,12 +19,19 @@ function seuil(benefice, reglages) {
 }
 
 export async function afficher(vue) {
+  const faites = await facturerSiBesoin();
+  if (faites.length) toast(`📅 ${faites.length} facture(s) de la semaine créée(s) : ${faites.map((f) => `${f.client} ${fmt(f.total)}`).join(", ")}`);
   const [t, reglages] = await Promise.all([rpc("tableau_de_bord"), q(table("reglages").select("*").eq("id", 1).single())]);
   const m = t.mois, dp = t.declaration_precedente;
   const alertes = [];
   if (dp.faite) alertes.push(`✅ Déclaration de ${libelleMois(dp.mois)} faite.`);
   else if (dp.activite) alertes.push(`${dp.en_retard ? "⚠️ <strong>En retard</strong> —" : "🏛️"} Déclaration de ${libelleMois(dp.mois)} à faire avant le <strong>${dateFr(dp.limite)}</strong> (impôt : ${fmt(dp.impot)}) <a href="#/compta/bilan">Déclarer →</a>`);
   if (t.factures.n) alertes.push(`🧾 ${t.factures.n} facture(s) à encaisser : <strong>${fmt(t.factures.total)}</strong>${t.factures.en_retard ? ` · <span class="rouge">${t.factures.en_retard} en retard</span>` : ""} <a href="#/factures">Voir →</a>`);
+  if (t.a_facturer.total) alertes.push(`📅 Commandes de la semaine passée à facturer : <strong>${fmt(t.a_facturer.total)}</strong> <a href="#/factures">Facturer →</a>`);
+  if (t.a_facturer.semaine_en_cours) alertes.push(`🗓️ Cette semaine, ${fmt(t.a_facturer.semaine_en_cours)} de commandes iront sur les factures de lundi prochain.`);
+  if (t.dettes_fournisseurs.du_maintenant) alertes.push(`🚚 À payer aux fournisseurs (semaine passée) : <strong>${fmt(t.dettes_fournisseurs.du_maintenant)}</strong> <a href="#/stock/achats">Payer →</a>`);
+  if (t.avances.total) alertes.push(`💸 ${fmt(t.avances.total)} avancé(s) par ${t.avances.n} gérant(s) à rembourser <a href="#/stock/achats">Voir →</a>`);
+  if (t.stock_bas) alertes.push(`📦 ${t.stock_bas} ingrédient(s) sous le stock de base <a href="#/stock/commander">À commander →</a>`);
   if (t.devis.acceptes) alertes.push(`📝 ${t.devis.acceptes} devis accepté(s) à facturer (${fmt(t.devis.total_acceptes)}) <a href="#/factures/devis">Voir →</a>`);
   if (t.paies_dues.n) alertes.push(`💳 ${t.paies_dues.n} paie(s) d'intérimaire à verser : <strong>${fmt(t.paies_dues.total)}</strong> — le compte du gérant doit les couvrir (Art. III) <a href="#/interim/paies">Voir →</a>`);
   if (t.depenses_mairie) alertes.push(`⏳ ${t.depenses_mairie} dépense(s) « autre » en attente de validation Mairie <a href="#/compta/depenses">Voir →</a>`);

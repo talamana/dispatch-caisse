@@ -2,7 +2,18 @@
 // - eclater : une commande de caisse -> les plats à préparer (les menus sont séparés en plats)
 // - besoins : des plats -> les cuissons à lancer et les ingrédients à réunir (sous-recettes comprises)
 
-const norm = (t) => String(t || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().trim();
+// synonymes : ce qu'on écrit -> le nom du produit dans le jeu (même liste que synonyme_ingredient() en SQL)
+const SYNONYMES = {
+  "lait": "Pot de lait entier", "pot de lait": "Pot de lait entier", "lait entier": "Pot de lait entier", "pots de lait": "Pot de lait entier",
+  "eau": "Bouteille d'eau", "bouteille eau": "Bouteille d'eau", "miel": "Pot de miel",
+  "chocolat": "Chocolat Candybox", "candybox": "Chocolat Candybox",
+};
+const ALIAS = Object.fromEntries(Object.entries(SYNONYMES).map(([k, v]) => [k, v.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase()]));
+const sansAccents = (t) => String(t || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+const norm = (t) => { const n = sansAccents(t); return ALIAS[n] || n; };
+export const normIngredient = norm;
+// nom affiché d'un ingrédient (synonymes : « Lait » = « Pot de lait entier »)
+export const nomCanonique = (t) => SYNONYMES[sansAccents(t)] || String(t || "").trim();
 
 export function indexer({ articles = [], recettes = [], ingredients = [] }) {
   const parId = new Map(recettes.map((r) => [r.id, r]));
@@ -166,9 +177,9 @@ function recompter(cuissons, idx) {
     const p = idx.prix.get(norm(e.nom));
     e.lieu = lieuDAchat(p);
     e.prix = prixChez(p, e.lieu);
-    e.cout = e.prix == null ? null : e.prix * e.qte;
+    e.cout = e.prix == null ? null : Math.round(e.prix * e.qte / 100) * 100;   // pas de centimes
     if (e.cout == null) sansPrix++; else total += e.cout;
-    if (p?.prix_superette == null) sansPrixSuperette++; else toutSuperette += p.prix_superette * e.qte;
+    if (p?.prix_superette == null) sansPrixSuperette++; else toutSuperette += Math.round(p.prix_superette * e.qte / 100) * 100;
     const g = groupes.get(e.lieu) || { lieu: e.lieu, articles: [], total: 0, sansPrix: 0 };
     g.articles.push(e);
     if (e.cout == null) g.sansPrix++; else g.total += e.cout;
@@ -188,10 +199,10 @@ export function lireComposition(texte) {
   if (t.includes(":")) t = t.slice(t.lastIndexOf(":") + 1);
   return t.split(/\n|,|;|\+|\/|\bet\b|&/i).map((x) => x.trim().replace(/^[-•*]\s*/, "").replace(/[.!]+$/, "")).filter(Boolean).map((x) => {
     let m = x.match(/^(\d+)\s*[x×*]?\s+(.+)$/i) || x.match(/^(\d+)\s*[x×*]\s*(.+)$/i);
-    if (m) return { nom: m[2].trim(), qte: Number(m[1]) };
+    if (m) return { nom: nomCanonique(m[2]), qte: Number(m[1]) };
     m = x.match(/^(.+?)\s*(?:[x×*]\s*(\d+)|\((\d+)\))$/i);
-    if (m) return { nom: m[1].trim(), qte: Number(m[2] || m[3]) };
-    return { nom: x, qte: 1 };
+    if (m) return { nom: nomCanonique(m[1]), qte: Number(m[2] || m[3]) };
+    return { nom: nomCanonique(x), qte: 1 };
   }).filter((c) => c.nom.length > 1);
 }
 

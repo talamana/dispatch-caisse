@@ -87,7 +87,7 @@ async function ventes(zone) {
     lignes.forEach((v) => v.lignes.forEach((l) => { parArticle[l.nom] = (parArticle[l.nom] || 0) + l.qte; }));
     const top = Object.entries(parArticle).sort((a, b) => b[1] - a[1]).slice(0, 8);
     zone.innerHTML = `<div class="kpis"><div class="kpi"><div class="etiquette">Commandes</div><div class="valeur">${lignes.length}</div></div>
-      <div class="kpi"><div class="etiquette">Encaissé</div><div class="valeur">${fmt(total)}</div></div>
+      <div class="kpi"><div class="etiquette">Vendu</div><div class="valeur">${fmt(total)}</div>${lignes.some((v) => v.mode !== "comptant") ? `<div class="discret">dont ${fmt(lignes.filter((v) => v.mode !== "comptant").reduce((s2, v) => s2 + v.total, 0))} sur facture</div>` : ""}</div>
       <div class="kpi"><div class="etiquette">Rabais accordés</div><div class="valeur">${fmt(rabais)}</div></div>
       <div class="kpi"><div class="etiquette">Meilleure vente</div><div class="valeur" style="font-size:20px">${top[0] ? `${echapper(top[0][0])} ×${top[0][1]}` : "—"}</div></div></div>
       <div class="bloc">${tableau(lignes, [
@@ -96,7 +96,9 @@ async function ventes(zone) {
         { titre: "Commande", rendu: (v) => echapper(v.lignes.map((l) => `${l.qte}× ${l.nom}`).join(", ")) },
         { titre: "Tarif / rabais", rendu: (v) => [v.ajustement ? `<span class="badge">${echapper(v.tarif)} ${v.ajustement > 0 ? "+" : ""}${fmt(v.ajustement)}</span>` : "",
           v.rabais ? `<span class="badge vert">−${fmt(v.rabais)}${v.motif_rabais ? " · " + echapper(v.motif_rabais) : ""}</span>` : ""].join(" ") },
-        { titre: "Client", rendu: (v) => `${echapper(v.client_nom || "De passage")} <span class="discret">${echapper(TYPES_CLIENT[v.type_client] || "")}</span>` },
+        { titre: "Client", rendu: (v) => `${echapper(v.client_nom || "De passage")} <span class="discret">${echapper(TYPES_CLIENT[v.type_client] || "")}</span>`
+          + (v.mode === "semaine" ? `<div><span class="badge orange">📅 ${v.facture_id ? "facturée" : "facture du lundi"}</span></div>`
+            : v.mode === "facture" ? '<div><span class="badge orange">🧾 sur facture</span></div>' : "") },
         { titre: "Vendeur", rendu: (v) => echapper(v.vendeur || "—") },
         { titre: "Total", classe: "droite", rendu: (v) => `<strong>${fmt(v.total)}</strong>` },
       ], { vide: "Aucune vente ce mois-ci.", actions: () => `<button class="btn petit" data-action="annuler" title="Annuler la vente">Annuler</button>`,
@@ -104,7 +106,7 @@ async function ventes(zone) {
   };
   brancherActions(zone, () => lignes, {
     annuler: async (v) => {
-      if (!(await confirmer(`Annuler la vente n°${v.id} (${fmt(v.total)}) ? La recette sera retirée de la compta.`, "Annuler la vente"))) return;
+      if (!(await confirmer(`Annuler la vente n°${v.id} (${fmt(v.total)}) ? ${v.mode === "comptant" ? "La recette sera retirée de la compta." : "Elle ne sera pas facturée."}`, "Annuler la vente"))) return;
       await rpc("annuler_vente", { p_id: v.id }); toast("Vente annulée."); charger();
     },
   });
@@ -162,6 +164,7 @@ async function depenses(zone) {
     { nom: "fournisseur", libelle: "Fournisseur", requis: true },
     { nom: "description", libelle: "Détail" },
     { nom: "justificatif", libelle: "Justificatif (lien de la capture)", plein: true, max: 500 },
+    { nom: "avance_par", libelle: "Avancé par (gérant)", aide: "Vide = payé par l'entreprise. Rempli = l'entreprise lui doit ce montant jusqu'au remboursement." },
     { nom: "validee_mairie", libelle: "Validée par la Mairie (catégorie « Autre »)", type: "case" },
     { nom: "ref_validation", libelle: "Référence de validation Mairie" },
   ];
@@ -175,7 +178,8 @@ async function depenses(zone) {
       ${tableau(lignes, [
         { titre: "Date", rendu: (d) => dateCourte(d.date) },
         { titre: "Catégorie", rendu: (d) => `${echapper(CATEGORIES_DEPENSE[d.categorie]?.split(" (")[0].split(" —")[0] || d.categorie)} ${etat(d)}` },
-        { titre: "Fournisseur", rendu: (d) => echapper(d.fournisseur || "") + (d.description ? `<div class="discret">${echapper(d.description)}</div>` : "") },
+        { titre: "Fournisseur", rendu: (d) => echapper(d.fournisseur || "") + (d.description ? `<div class="discret">${echapper(d.description)}</div>` : "")
+          + (d.avance_par ? `<div><span class="badge ${d.rembourse_le ? "vert" : "orange"}">💸 avancé par ${echapper(d.avance_par)} · ${d.rembourse_le ? "remboursé" : "à rembourser"}</span></div>` : "") },
         { titre: "Justificatif", rendu: (d) => d.justificatif ? (/^https?:\/\//.test(d.justificatif) ? `<a href="${echapper(d.justificatif)}" target="_blank" rel="noopener">voir</a>` : echapper(d.justificatif)) : "" },
         { titre: "Montant", classe: "droite", rendu: (d) => `<strong>${fmt(d.montant)}</strong>` },
       ], { vide: "Aucune dépense ce mois-ci.", actions: (d) => (d.categorie === "autre" && !d.validee_mairie ? `<button class="btn petit vert" data-action="valider">Validée Mairie</button> ` : "")

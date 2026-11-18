@@ -1,7 +1,7 @@
 // Devis et factures : création, encaissement, conversion, impression.
-import { clients, nomsClients, oublierClients, q, rpc, table } from "../api.js";
+import { clients, facturerSiBesoin, nomsClients, oublierClients, q, rpc, table } from "../api.js";
 import {
-  $, $$, brancherActions, confirmer, dateCourte, depuisChamp, echapper, fenetre, fmt, messageErreur, tableau, toast, TYPES_CLIENT, versCentimes,
+  $, $$, brancherActions, confirmer, dateCourte, depuisChamp, echapper, fenetre, fmt, messageErreur, semaineFr, tableau, toast, TYPES_CLIENT, versCentimes,
 } from "../outils.js";
 
 const STATUTS = {
@@ -17,6 +17,7 @@ export async function afficher(vue, params) {
     <button class="btn principal" data-action="nouveau" data-kind="facture">+ Nouvelle facture</button></div>
     <div class="onglets-page"><button data-onglet="factures" aria-selected="${onglet === "facture"}">Factures</button>
       <button data-onglet="devis" aria-selected="${onglet === "devis"}">Devis</button></div>
+    <div id="semaine"></div>
     <div class="filtres" style="margin-bottom:12px"><select class="champ" id="filtre-statut"></select></div>
     <div id="liste"></div></div>`;
   $$("[data-onglet]", vue).forEach((b) => (b.onclick = () => { location.hash = `#/factures/${b.dataset.onglet}`; }));
@@ -27,7 +28,54 @@ export async function afficher(vue, params) {
   const page = $(".page", vue);
   const visibles = () => (filtreStatut.value ? lignes.filter((d) => d.statut === filtreStatut.value) : lignes);
 
+  // Factures à la semaine (services publics, entreprises cochées) : ce qui reste à facturer
+  const dessinerSemaine = async () => {
+    if (onglet !== "facture") return;
+    const a = await rpc("a_facturer");
+    const zoneS = $("#semaine", vue);
+    if (!zoneS) return;
+    const faire = a.filter((x) => x.a_faire), cours = a.filter((x) => !x.a_faire);
+    zoneS.innerHTML = `<div class="bloc"><div class="bloc-tete"><h2 class="titre-bloc">📅 Facturation à la semaine</h2><span class="espace"></span>
+      ${faire.length ? `<button class="btn principal" data-action="facturer">Créer les factures de la semaine passée (${faire.length})</button>` : ""}</div>
+      <p class="discret">Les commandes des clients « facturés à la semaine » (services publics, entreprises cochées) sont regroupées :
+        chaque lundi, une facture par payeur pour la semaine précédente. Elles sont créées automatiquement quand un gérant ouvre le site.</p>
+      ${a.length ? tableau(a, [
+        { titre: "Payeur", rendu: (x) => `<strong>${echapper(x.payeur)}</strong><div class="discret">${echapper((x.organismes || []).filter(Boolean).join(", "))}</div>` },
+        { titre: "Semaine", rendu: (x) => `${semaineFr(x.semaine)} ${x.a_faire ? '<span class="badge orange">à facturer</span>' : '<span class="badge">en cours</span>'}` },
+        { titre: "Commandes", classe: "droite", rendu: (x) => x.n },
+        { titre: "Montant", classe: "droite", rendu: (x) => `<strong>${fmt(x.total)}</strong>` },
+        { titre: "", classe: "droite", rendu: (x) => x.a_faire ? ""
+          : `<button class="btn petit" data-avance="${x.payeur_id}" title="Le client paie sa semaine avant lundi">💳 Payée en avance</button>` },
+      ]) : '<div class="vide">Aucune commande en attente de facturation.</div>'}
+      ${cours.length ? `<p class="discret">Semaine en cours : ${fmt(cours.reduce((s2, x) => s2 + x.total, 0))} — facturé lundi prochain,
+        sauf si le client paie en avance (bouton 💳). Une facture déjà créée peut aussi être encaissée avant son échéance.</p>` : ""}</div>`;
+    $$("[data-avance]", zoneS).forEach((b) => (b.onclick = () => payerEnAvance(a.find((x) => String(x.payeur_id) === b.dataset.avance && !x.a_faire))));
+  };
+
+  // Le payeur règle sa semaine en cours avant lundi : facture créée tout de suite (et encaissée si coché)
+  const payerEnAvance = async (x) => {
+    if (!x) return;
+    const r = await fenetre({ titre: `${x.payeur} paie en avance`, contenu: `<p>Facturer maintenant les commandes de la semaine en cours :
+        <strong>${x.n} commande${x.n > 1 ? "s" : ""}, ${fmt(x.total)}</strong>.</p>
+      <p class="discret">Les commandes passées après aujourd'hui iront sur la facture de lundi prochain, comme d'habitude.</p>
+      <form class="form"><label class="case plein"><input type="checkbox" name="encaisser" checked> Payée maintenant (ajoutée au chiffre d'affaires)</label>
+        <label class="plein">Date du paiement<input type="date" name="date" value="${new Date().toISOString().slice(0, 10)}"></label></form>`,
+      boutons: [{ texte: "Annuler" }, { texte: "Créer la facture", classe: "principal", action: async (z) => {
+        const faites = await rpc("facturer_semaines", { p_payeur: x.payeur_id, p_en_cours: true });
+        if ($("[name=encaisser]", z).checked) {
+          for (const f of faites) await rpc("payer_facture", { p_id: f.id, p_quand: depuisChamp($("[name=date]", z).value, false) || new Date().toISOString() });
+        }
+        toast(`${faites.map((f) => f.numero).join(", ")} créée${$("[name=encaisser]", z).checked ? " et encaissée" : ""} (${fmt(faites.reduce((s2, f) => s2 + f.total, 0))}).`);
+      } }] });
+    if (r) charger();
+  };
+
   const charger = async () => {
+    if (onglet === "facture") {
+      const faites = await facturerSiBesoin();
+      if (faites.length) toast(`📅 ${faites.length} facture(s) de la semaine créée(s).`);
+      await dessinerSemaine();
+    }
     [lignes, noms] = await Promise.all([q(table("documents").select("*").eq("kind", onglet).order("id", { ascending: false })), nomsClients()]);
     const ouverts = lignes.filter((d) => ["impayee", "en_attente", "accepte"].includes(d.statut));
     const total = ouverts.reduce((s, d) => s + d.total, 0);
@@ -73,9 +121,14 @@ export async function afficher(vue, params) {
         } }] });
       if (r) charger();
     },
+    facturer: async () => {
+      const faites = await facturerSiBesoin(true);
+      toast(faites.length ? `${faites.length} facture(s) créée(s) : ${faites.map((f) => `${f.numero} ${f.client}`).join(", ")}` : "Rien à facturer.");
+      charger();
+    },
     accepter: async (d) => { await q(table("documents").update({ statut: "accepte" }).eq("id", d.id)); charger(); },
     refuser: async (d) => { await q(table("documents").update({ statut: "refuse" }).eq("id", d.id)); charger(); },
-    annuler: async (d) => { if (await confirmer(`Annuler la facture ${d.numero} ?`, "Annuler la facture")) { await q(table("documents").update({ statut: "annulee" }).eq("id", d.id)); charger(); } },
+    annuler: async (d) => { if (await confirmer(`Annuler la facture ${d.numero} ? Si c'est une facture de la semaine, ses commandes repassent « à facturer ».`, "Annuler la facture")) { await q(table("documents").update({ statut: "annulee" }).eq("id", d.id)); charger(); } },
     rembourser: async (d) => {
       if (!(await confirmer(`Annuler l'encaissement de ${d.numero} ? La recette est retirée et la facture redevient impayée.`, "Annuler l'encaissement"))) return;
       await q(table("recettes").delete().eq("facture_id", d.id)); toast("Encaissement annulé."); charger();
@@ -115,7 +168,7 @@ export async function editeurDocument(kind) {
   const recalculer = () => {
     let total = 0;
     $$(".ligne-doc", contenu).forEach((l, i) => {
-      const x = lire()[i], t = Number.isFinite(x.prix_unitaire) && x.quantite > 0 ? Math.round(x.quantite * x.prix_unitaire) : 0;
+      const x = lire()[i], t = Number.isFinite(x.prix_unitaire) && x.quantite > 0 ? Math.round(x.quantite * x.prix_unitaire / 100) * 100 : 0;
       $(".total", l).textContent = fmt(t); total += t;
     });
     $("#total-doc", contenu).textContent = `Total : ${fmt(total)}`;

@@ -9,6 +9,7 @@ const PAGES = [
   { id: "compta", titre: "Compta", module: () => import("./vues/compta.js") },
   { id: "factures", titre: "Devis & factures", module: () => import("./vues/documents.js") },
   { id: "clients", titre: "Clients", module: () => import("./vues/clients.js") },
+  { id: "stock", titre: "Stock & achats", module: () => import("./vues/stock.js") },
   { id: "interim", titre: "Intérim", module: () => import("./vues/interim.js") },
   { id: "organisation", titre: "Tâches & agenda", module: () => import("./vues/organisation.js") },
   { id: "carte", titre: "Carte & réglages", module: () => import("./vues/carte.js") },
@@ -83,6 +84,7 @@ async function afficher() {
   dessinerEntete();
   if (typeof nettoyage === "function") { try { nettoyage(); } catch { /* rien */ } }
   nettoyage = null;
+  document.querySelectorAll(".voile").forEach((v) => v.remove());   // fenêtre restée ouverte d'une autre page
   // Nouveau conteneur à chaque page : une page encore en chargement écrit dans l'ancien, détaché
   const vue = document.createElement("div");
   $("#vue").replaceChildren(vue);
@@ -107,6 +109,21 @@ async function afficher() {
     vue.innerHTML = `<div class="page"><div class="bloc"><h2 class="titre-bloc">Oups</h2><p>${echapper(messageErreur(err))}</p>
       <button class="btn" onclick="location.reload()">Recharger</button></div></div>`;
   }
+}
+
+// Version de test : bandeau bien visible + remise à zéro des données fictives
+if (window.DISPATCH?.essai) {
+  const b = document.createElement("div");
+  b.className = "bandeau-essai";
+  b.innerHTML = `🧪 <strong>VERSION DE TEST</strong> — données fictives, enregistrées seulement sur cet appareil. La vraie base n'est pas touchée.
+    Code gérant : <strong>pizza</strong>. <button class="lien" type="button" id="essai-zero">Remettre à zéro</button>`;
+  document.body.prepend(b);
+  document.body.classList.add("essai");
+  $("#essai-zero").onclick = async () => {
+    if (!confirm("Effacer toutes les données de test de cet appareil et repartir des données d'exemple ?")) return;
+    (await import("./essai/backend.js")).reinitialiser();
+  };
+  $("#vue").innerHTML = `<div class="page"><div class="vide">🧪 Préparation de la base de test… (quelques secondes la première fois)</div></div>`;
 }
 
 $("#puce-compte").addEventListener("click", async () => {
