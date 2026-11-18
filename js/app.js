@@ -116,7 +116,7 @@ if (window.DISPATCH?.essai) {
   const b = document.createElement("div");
   b.className = "bandeau-essai";
   b.innerHTML = `🧪 <strong>VERSION DE TEST</strong> — données fictives, enregistrées seulement sur cet appareil. La vraie base n'est pas touchée.
-    Code gérant : <strong>pizza</strong>. <button class="lien" type="button" id="essai-zero">Remettre à zéro</button>`;
+    Code gérant : <strong>essai</strong>. <button class="lien" type="button" id="essai-zero">Remettre à zéro</button>`;
   document.body.prepend(b);
   document.body.classList.add("essai");
   $("#essai-zero").onclick = async () => {

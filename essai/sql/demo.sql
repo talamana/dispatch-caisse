@@ -1,6 +1,6 @@
 -- Données FICTIVES pour la version de test (jamais envoyées sur la vraie base).
 update reglages set entreprise = 'Le Dispatch', sous_titre = 'VERSION DE TEST — données fictives' where id = 1;
-insert into acces (id, code_hash) values (1, extensions.crypt('pizza', extensions.gen_salt('bf'))) on conflict (id) do nothing;
+insert into acces (id, code_hash) values (1, extensions.crypt('essai', extensions.gen_salt('bf'))) on conflict (id) do nothing;
 
 -- Logements (stock de base)
 insert into logements (nom, gerant, ordre) values ('Appartement Vinewood', 'Tony Russo', 1), ('Maison Sandy Shores', 'Mia Costa', 2);
